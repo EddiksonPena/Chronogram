@@ -1,0 +1,12 @@
+{
+  "name": "memcortex",
+  "private": true,
+  "workspaces": [
+    "apps/dashboard"
+  ],
+  "scripts": {
+    "dashboard:dev": "npm --prefix apps/dashboard run dev",
+    "dashboard:build": "npm --prefix apps/dashboard run build",
+    "dashboard:lint": "npm --prefix apps/dashboard run lint"
+  }
+}
