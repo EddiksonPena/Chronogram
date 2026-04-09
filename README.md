@@ -58,6 +58,12 @@ The install command writes project-local runtime artifacts under `.memcortex/<ta
 - Or use the Makefile target: `make verify-e2e`
 - Operator runbook: [`docs/runbooks/e2e-verification.md`](./docs/runbooks/e2e-verification.md)
 
+## Release
+
+- Current version: `0.1.0`
+- Changelog: [`CHANGELOG.md`](./CHANGELOG.md)
+- Release runbook: [`docs/runbooks/release.md`](./docs/runbooks/release.md)
+
 ## Key paths
 
 - [`apps/api/main.py`](/Users/eddiksonpena/Projects/MemCortex/apps/api/main.py)
