@@ -5,7 +5,15 @@ from temporalio.worker import Worker
 
 from packages.core.settings import settings
 from temporal.activities.ingest import parse_source_activity
+from temporal.activities.maintenance import (
+    complete_job_activity,
+    procedural_promotion_activity,
+    repair_activity,
+    semantic_promotion_activity,
+    summarization_activity,
+)
 from temporal.workflows.ingest import IngestSourceWorkflow
+from temporal.workflows.maintenance import MaintenanceWorkflow, RepairWorkflow
 
 
 async def main() -> None:
@@ -13,8 +21,15 @@ async def main() -> None:
     worker = Worker(
         client,
         task_queue=settings.temporal_task_queue,
-        workflows=[IngestSourceWorkflow],
-        activities=[parse_source_activity],
+        workflows=[IngestSourceWorkflow, MaintenanceWorkflow, RepairWorkflow],
+        activities=[
+            parse_source_activity,
+            semantic_promotion_activity,
+            procedural_promotion_activity,
+            summarization_activity,
+            repair_activity,
+            complete_job_activity,
+        ],
     )
     await worker.run()
 

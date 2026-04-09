@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
@@ -10,7 +8,7 @@ services:
       POSTGRES_USER: brain
       POSTGRES_PASSWORD: brain
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PUBLIC_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -19,7 +17,7 @@ services:
     container_name: memcortex-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PUBLIC_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
 
@@ -31,8 +29,8 @@ services:
       NEO4J_AUTH: neo4j/password12345
       NEO4J_PLUGINS: "[\"apoc\"]"
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "${NEO4J_HTTP_PUBLIC_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PUBLIC_PORT:-7687}:7687"
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
@@ -42,7 +40,7 @@ services:
     container_name: memcortex-weaviate
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${WEAVIATE_PUBLIC_PORT:-8080}:8080"
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
@@ -58,16 +56,15 @@ services:
     container_name: memcortex-temporal
     restart: unless-stopped
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: brain
       POSTGRES_PWD: brain
       POSTGRES_SEEDS: postgres
-      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
     depends_on:
       - postgres
     ports:
-      - "7233:7233"
+      - "${TEMPORAL_PUBLIC_PORT:-7233}:7233"
 
   temporal-ui:
     image: temporalio/ui:2.27.0
@@ -78,17 +75,17 @@ services:
     depends_on:
       - temporal
     ports:
-      - "8233:8080"
+      - "${TEMPORAL_UI_PUBLIC_PORT:-8233}:8080"
 
   opa:
-    image: openpolicyagent/opa:0.67.1
+    image: openpolicyagent/opa:1.2.0-static
     container_name: memcortex-opa
     restart: unless-stopped
-    command: ["run", "--server", "/policy"]
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policy"]
     volumes:
       - ./infra/opa:/policy
     ports:
-      - "8181:8181"
+      - "${OPA_PUBLIC_PORT:-8181}:8181"
 
   keycloak:
     image: quay.io/keycloak/keycloak:25.0
@@ -99,7 +96,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     ports:
-      - "8081:8080"
+      - "${KEYCLOAK_PUBLIC_PORT:-8081}:8080"
 
   api:
     build:
@@ -109,6 +106,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain_runtime
     depends_on:
       - postgres
       - redis
@@ -118,7 +117,7 @@ services:
       - opa
       - keycloak
     ports:
-      - "8000:8000"
+      - "${API_PUBLIC_PORT:-8000}:8000"
     volumes:
       - .:/app
 
@@ -130,6 +129,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain_runtime
     command: ["python", "-m", "apps.workers.main"]
     depends_on:
       - temporal
@@ -144,11 +145,13 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://brain:brain@postgres:5432/brain_runtime
     command: ["uvicorn", "apps.mcp_server.main:app", "--host", "0.0.0.0", "--port", "8100"]
     depends_on:
       - api
     ports:
-      - "8100:8100"
+      - "${MCP_PUBLIC_PORT:-8100}:8100"
     volumes:
       - .:/app
 
@@ -163,7 +166,7 @@ services:
     depends_on:
       - api
     ports:
-      - "3000:3000"
+      - "${DASHBOARD_PUBLIC_PORT:-3000}:3000"
     volumes:
       - .:/app
 

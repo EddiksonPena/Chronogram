@@ -1,6 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from apps.api.deps import require_permission
+from packages.core.auth import PrincipalContext
 from packages.memory.service import MemoryService
 
 router = APIRouter(tags=["memory"])
@@ -30,7 +32,12 @@ class FactRequest(BaseModel):
 
 
 @router.post("/memory/search")
-async def search_memory(payload: MemorySearchRequest) -> dict[str, object]:
+async def search_memory(
+    payload: MemorySearchRequest,
+    _: PrincipalContext = Depends(
+        require_permission("read_memory", lambda principal: f"memory:{principal.namespace}")
+    ),
+) -> dict[str, object]:
     return MemoryService().search(
         query=payload.query,
         workspace_id=payload.workspace_id,
@@ -40,48 +47,78 @@ async def search_memory(payload: MemorySearchRequest) -> dict[str, object]:
 
 
 @router.post("/memory/episodes")
-async def remember_episode(payload: EpisodeRequest) -> dict[str, object]:
+async def remember_episode(
+    payload: EpisodeRequest,
+    principal: PrincipalContext = Depends(
+        require_permission("write_memory", lambda principal: f"memory:{principal.namespace}")
+    ),
+) -> dict[str, object]:
     return MemoryService().remember_episode(
         workspace_id=payload.workspace_id,
         namespace=payload.namespace,
         title=payload.title,
         content=payload.content,
-        principal_id=payload.principal_id,
+        principal_id=principal.principal_id,
     )
 
 
 @router.post("/memory/facts")
-async def upsert_fact(payload: FactRequest) -> dict[str, object]:
+async def upsert_fact(
+    payload: FactRequest,
+    principal: PrincipalContext = Depends(
+        require_permission("write_memory", lambda principal: f"memory:{principal.namespace}")
+    ),
+) -> dict[str, object]:
     return MemoryService().upsert_fact(
         workspace_id=payload.workspace_id,
         namespace=payload.namespace,
         fact=payload.fact,
         source_ids=payload.source_ids,
-        principal_id=payload.principal_id,
+        principal_id=principal.principal_id,
     )
 
 
 @router.post("/memory/procedures")
-async def store_procedure(payload: EpisodeRequest) -> dict[str, object]:
+async def store_procedure(
+    payload: EpisodeRequest,
+    principal: PrincipalContext = Depends(
+        require_permission("write_memory", lambda principal: f"procedure:{principal.namespace}")
+    ),
+) -> dict[str, object]:
     return MemoryService().store_procedure(
         workspace_id=payload.workspace_id,
         namespace=payload.namespace,
         title=payload.title,
         content=payload.content,
-        principal_id=payload.principal_id,
+        principal_id=principal.principal_id,
     )
 
 
 @router.post("/memory/promote")
-async def promote_memory(memory_id: str) -> dict[str, object]:
+async def promote_memory(
+    memory_id: str,
+    _: PrincipalContext = Depends(
+        require_permission("modify_memory", lambda principal: f"memory:{principal.namespace}")
+    ),
+) -> dict[str, object]:
     return MemoryService().promote(memory_id)
 
 
 @router.post("/memory/archive")
-async def archive_memory(memory_id: str) -> dict[str, object]:
+async def archive_memory(
+    memory_id: str,
+    _: PrincipalContext = Depends(
+        require_permission("modify_memory", lambda principal: f"memory:{principal.namespace}")
+    ),
+) -> dict[str, object]:
     return MemoryService().archive(memory_id)
 
 
 @router.get("/memory/{memory_id}")
-async def get_memory(memory_id: str) -> dict[str, object]:
+async def get_memory(
+    memory_id: str,
+    _: PrincipalContext = Depends(
+        require_permission("read_memory", lambda principal: f"memory:{principal.namespace}")
+    ),
+) -> dict[str, object]:
     return MemoryService().get(memory_id)

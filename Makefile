@@ -1,4 +1,4 @@
-.PHONY: up down logs api workers mcp dashboard format lint test
+.PHONY: up down logs api workers mcp dashboard format lint test verify-e2e
 
 up:
 	docker compose up --build -d
@@ -29,3 +29,6 @@ lint:
 
 test:
 	pytest -q
+
+verify-e2e:
+	python3 scripts/verify_e2e.py

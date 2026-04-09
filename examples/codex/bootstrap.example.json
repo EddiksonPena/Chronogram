@@ -1,0 +1,22 @@
+{
+  "target": "codex",
+  "display_name": "Codex",
+  "workspace_id": "default",
+  "namespace": "project",
+  "api_url": "http://localhost:8000",
+  "mcp_server_url": "http://localhost:8100",
+  "capabilities": {
+    "supports_mcp": true,
+    "supports_hooks": true,
+    "supports_http": true,
+    "supports_stdio_json": false,
+    "supports_project_local_config": true,
+    "supports_post_task_writeback": true
+  },
+  "pre_task_endpoint": "/v1/context/resolve",
+  "post_task_endpoint": "/v1/capabilities/outcomes",
+  "integration_notes": [
+    "Use project-local hooks for pre-task context resolution and post-task outcome reporting.",
+    "Use the generated MCP config to connect MemCortex as an external sidecar."
+  ]
+}

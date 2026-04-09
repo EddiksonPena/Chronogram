@@ -1,0 +1,23 @@
+{
+  "memcortex": {
+    "transport": "http",
+    "url": "http://localhost:8100",
+    "headers": {
+      "x-workspace-id": "default",
+      "x-namespace": "project"
+    },
+    "resources": [
+      "/resources/project-summary"
+    ],
+    "tools": [
+      "resolve_context",
+      "build_context_pack",
+      "search_memory",
+      "get_capabilities",
+      "recommend_capabilities",
+      "explain_recall",
+      "report_outcome",
+      "run_maintenance_job"
+    ]
+  }
+}

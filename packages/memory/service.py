@@ -2,19 +2,34 @@ from datetime import UTC, datetime
 
 from packages.core.ids import make_id
 from packages.core.models.contracts import Lineage, MemoryObject, TruthState
+from packages.storage.db import SessionLocal
+from packages.storage.repositories import create_memory, get_memory, list_memories, update_memory_status
 
 
 class MemoryService:
     def search(self, query: str, workspace_id: str, namespace: str, limit: int) -> dict[str, object]:
+        with SessionLocal() as session:
+            stored = list_memories(session, workspace_id, namespace, query, limit)
         results = [
             {
-                "memory_id": "mem_demo_001",
-                "title": f"Placeholder memory for '{query}'",
-                "memory_type": "semantic",
-                "score": 0.91,
-                "truth_state": TruthState.EXTRACTED,
+                "memory_id": item["memory_id"],
+                "title": item["title"],
+                "memory_type": item["type"],
+                "score": round(item["importance_score"], 2),
+                "truth_state": item["truth_state"],
             }
+            for item in stored
         ]
+        if not results:
+            results = [
+                {
+                    "memory_id": "mem_demo_001",
+                    "title": f"Placeholder memory for '{query}'",
+                    "memory_type": "semantic",
+                    "score": 0.91,
+                    "truth_state": TruthState.EXTRACTED,
+                }
+            ]
         return {"query": query, "results": results[:limit]}
 
     def remember_episode(
@@ -35,7 +50,8 @@ class MemoryService:
             valid_at=datetime.now(UTC),
             lineage=Lineage(workflow="remember_episode"),
         )
-        return episode.model_dump(mode="json")
+        with SessionLocal() as session:
+            return create_memory(session, episode)
 
     def upsert_fact(
         self,
@@ -59,7 +75,8 @@ class MemoryService:
             source_ids=source_ids,
             lineage=Lineage(workflow="upsert_fact"),
         )
-        return memory.model_dump(mode="json")
+        with SessionLocal() as session:
+            return create_memory(session, memory)
 
     def store_procedure(
         self, workspace_id: str, namespace: str, title: str, content: str, principal_id: str
@@ -78,16 +95,23 @@ class MemoryService:
             source_ids=[],
             lineage=Lineage(workflow="store_procedure"),
         )
-        return memory.model_dump(mode="json")
+        with SessionLocal() as session:
+            return create_memory(session, memory)
 
     def promote(self, memory_id: str) -> dict[str, object]:
-        return {"memory_id": memory_id, "status": "promotion_queued"}
+        with SessionLocal() as session:
+            updated = update_memory_status(session, memory_id, TruthState.REINFORCED.value)
+        return {"memory_id": memory_id, "status": "promotion_queued", "memory": updated}
 
     def archive(self, memory_id: str) -> dict[str, object]:
-        return {"memory_id": memory_id, "status": "archived"}
+        with SessionLocal() as session:
+            updated = update_memory_status(session, memory_id, TruthState.DEPRECATED.value)
+        return {"memory_id": memory_id, "status": "archived", "memory": updated}
 
     def get(self, memory_id: str) -> dict[str, object]:
-        return {
+        with SessionLocal() as session:
+            record = get_memory(session, memory_id)
+        return record or {
             "memory_id": memory_id,
             "type": "semantic",
             "title": "Memory placeholder",

@@ -1,5 +1,13 @@
 from packages.core.ids import make_id
 from packages.core.models.contracts import CapabilityObject, TruthState
+from packages.storage.db import SessionLocal
+from packages.storage.repositories import (
+    capability_metrics,
+    create_capability_outcome,
+    get_capability,
+    list_capabilities,
+    seed_capabilities,
+)
 
 
 class CapabilityService:
@@ -35,34 +43,56 @@ class CapabilityService:
             ),
         ]
 
+    def seed_defaults(self) -> None:
+        with SessionLocal() as session:
+            seed_capabilities(session, self._catalog("global", "global"))
+
     def search(self, workspace_id: str, namespace: str, task: str, limit: int) -> dict[str, object]:
-        catalog = self._catalog(workspace_id, namespace)
+        with SessionLocal() as session:
+            catalog = list_capabilities(session, workspace_id, namespace)
+            if not catalog:
+                seed_capabilities(session, self._catalog("global", "global"))
+                catalog = list_capabilities(session, workspace_id, namespace)
         matches = [
-            item for item in catalog if any(token in item.description.lower() for token in task.lower().split())
+            item
+            for item in catalog
+            if any(
+                token in f"{item['name']} {item['description']}".lower()
+                for token in task.lower().split()
+            )
         ] or catalog
         return {
             "query": task,
-            "results": [item.model_dump() for item in matches[:limit]],
+            "results": matches[:limit],
         }
 
     def recommend(
         self, workspace_id: str, namespace: str, task: str, limit: int
     ) -> dict[str, object]:
-        catalog = self._catalog(workspace_id, namespace)
+        with SessionLocal() as session:
+            catalog = list_capabilities(session, workspace_id, namespace)
+            if not catalog:
+                seed_capabilities(session, self._catalog("global", "global"))
+                catalog = list_capabilities(session, workspace_id, namespace)
+            metrics = capability_metrics(session)
         recommendations = []
         for item in catalog[:limit]:
+            metric = metrics.get(item["capability_id"], {})
             recommendations.append(
                 {
-                    "capability_id": item.capability_id,
-                    "name": item.name,
-                    "score": round(item.reliability_score, 2),
+                    "capability_id": item["capability_id"],
+                    "name": item["name"],
+                    "score": round(float(item["reliability_score"]), 2),
                     "reason": f"Recommended for task '{task}' based on trigger and reliability match.",
+                    "success_rate": metric.get("success_rate", item["success_rate"]),
                 }
             )
         return {"task": task, "recommendations": recommendations}
 
     def get(self, capability_id: str) -> dict[str, object]:
-        return {
+        with SessionLocal() as session:
+            record = get_capability(session, capability_id)
+        return record or {
             "capability_id": capability_id,
             "status": "known" if capability_id.startswith("cap_") else "placeholder",
             "description": "Capability lookup scaffold",
@@ -76,12 +106,16 @@ class CapabilityService:
         workspace_id: str,
         namespace: str,
     ) -> dict[str, object]:
-        return {
-            "outcome_id": make_id("outcome"),
-            "capability_id": capability_id,
-            "success": success,
-            "latency_ms": latency_ms,
-            "workspace_id": workspace_id,
-            "namespace": namespace,
-            "status": "recorded",
-        }
+        outcome_id = make_id("outcome")
+        with SessionLocal() as session:
+            record = create_capability_outcome(
+                session,
+                outcome_id=outcome_id,
+                capability_id=capability_id,
+                workspace_id=workspace_id,
+                namespace=namespace,
+                success=success,
+                latency_ms=latency_ms,
+            )
+        record["status"] = "recorded"
+        return record

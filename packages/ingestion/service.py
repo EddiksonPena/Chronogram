@@ -3,8 +3,12 @@ from pathlib import Path
 
 from packages.core.ids import make_id
 from packages.core.models.contracts import SourceEnvelope
+from packages.graph.service import GraphService
 from packages.ingestion.classifier import classify_source
 from packages.ingestion.parsers.registry import parse_source
+from packages.storage.db import SessionLocal
+from packages.storage.repositories import replace_chunks, upsert_source
+from packages.vector.service import VectorService
 
 
 class IngestionService:
@@ -33,20 +37,25 @@ class IngestionService:
         )
         parsed = parse_source(file_path, raw_text)
         chunks = self._chunk_text(raw_text, file_path.suffix.lower())
+        source_payload = source.model_dump()
+        with SessionLocal() as session:
+            upsert_source(session, source_payload)
+            replace_chunks(
+                session,
+                source_id=source.source_id,
+                workspace_id=workspace_id,
+                namespace=namespace,
+                content_class=source.content_class,
+                chunks=chunks,
+            )
+        graph_write = GraphService().upsert_source(source.model_dump(mode="json"), parsed, chunks)
+        vector_write = VectorService().upsert_chunks(source.model_dump(mode="json"), chunks)
         return {
             "source": source.model_dump(mode="json"),
             "parsed": parsed,
             "chunks": chunks,
-            "graph_write": {
-                "status": "planned",
-                "nodes": max(1, len(chunks)),
-                "relationships": max(0, len(chunks) - 1),
-            },
-            "vector_write": {
-                "status": "planned",
-                "collection": "memory_documents",
-                "documents": len(chunks),
-            },
+            "graph_write": graph_write,
+            "vector_write": vector_write,
             "status": "parsed",
         }
 
