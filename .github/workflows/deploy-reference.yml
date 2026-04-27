@@ -1,0 +1,144 @@
+name: Deploy Reference Stack
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Target environment label
+        required: true
+        type: string
+      deploy_platform:
+        description: Apply the self-hosted platform reference
+        required: true
+        type: boolean
+      image_tag:
+        description: Image tag to deploy for app services
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment label
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      deploy_platform:
+        description: Apply the self-hosted platform reference
+        required: true
+        default: true
+        type: boolean
+      image_tag:
+        description: Image tag to deploy for app services
+        required: true
+        default: latest
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: chronogram-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+
+      - name: Load kubeconfig
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+        run: |
+          test -n "$KUBE_CONFIG_B64"
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_B64" | base64 --decode > "$HOME/.kube/config"
+
+      - name: Apply namespace
+        run: kubectl apply -f deploy/k8s/namespace.yaml
+
+      - name: Apply platform reference
+        if: ${{ inputs.deploy_platform == true }}
+        run: kubectl apply -k deploy/k8s/platform
+
+      - name: Apply network policies and disruption budgets
+        run: |
+          kubectl apply -f deploy/k8s/networkpolicy.yaml
+          kubectl apply -f deploy/k8s/poddisruptionbudgets.yaml
+
+      - name: Apply config
+        run: kubectl apply -f deploy/k8s/configmap.yaml
+
+      - name: Sync app and platform secrets
+        env:
+          CHRONOGRAM_API_KEY: ${{ secrets.CHRONOGRAM_API_KEY }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+          TEMPORAL_POSTGRES_USER: ${{ secrets.TEMPORAL_POSTGRES_USER }}
+          TEMPORAL_POSTGRES_PASSWORD: ${{ secrets.TEMPORAL_POSTGRES_PASSWORD }}
+          TEMPORAL_POSTGRES_DB: ${{ secrets.TEMPORAL_POSTGRES_DB }}
+        run: |
+          kubectl create secret generic chronogram-secrets \
+            --namespace chronogram \
+            --from-literal=api-key="$CHRONOGRAM_API_KEY" \
+            --from-literal=neo4j-password="$NEO4J_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic chronogram-platform-secrets \
+            --namespace chronogram \
+            --from-literal=neo4j-password="$NEO4J_PASSWORD" \
+            --from-literal=temporal-postgres-user="${TEMPORAL_POSTGRES_USER:-temporal}" \
+            --from-literal=temporal-postgres-password="$TEMPORAL_POSTGRES_PASSWORD" \
+            --from-literal=temporal-postgres-db="${TEMPORAL_POSTGRES_DB:-temporal}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Pin image tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          sed "s|ghcr.io/chronogram/chronogram-memory-api:latest|ghcr.io/${OWNER}/chronogram-memory-api:${IMAGE_TAG}|g; s|ghcr.io/chronogram/chronogram-worker:latest|ghcr.io/${OWNER}/chronogram-worker:${IMAGE_TAG}|g" deploy/k8s/memory-api-deployment.yaml > /tmp/memory-api.yaml
+          sed "s|ghcr.io/chronogram/chronogram-worker:latest|ghcr.io/${OWNER}/chronogram-worker:${IMAGE_TAG}|g" deploy/k8s/worker-deployment.yaml > /tmp/worker.yaml
+
+      - name: Deploy app layer
+        run: |
+          kubectl apply -f /tmp/memory-api.yaml
+          kubectl apply -f /tmp/worker.yaml
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/chronogram-memory-api -n chronogram --timeout=180s
+          kubectl rollout status deployment/chronogram-worker -n chronogram --timeout=180s
+
+      - name: Smoke test app health
+        env:
+          CHRONOGRAM_API_KEY: ${{ secrets.CHRONOGRAM_API_KEY }}
+          CHRONOGRAM_BASE_URL: http://127.0.0.1:14000
+          CHRONOGRAM_WORKER_URL: http://127.0.0.1:14010
+        run: |
+          kubectl port-forward -n chronogram svc/chronogram-memory-api 14000:4000 >/tmp/chronogram-memory-api-port-forward.log 2>&1 &
+          API_FORWARD_PID=$!
+          kubectl port-forward -n chronogram svc/chronogram-worker 14010:4010 >/tmp/chronogram-worker-port-forward.log 2>&1 &
+          WORKER_FORWARD_PID=$!
+          trap 'kill $API_FORWARD_PID $WORKER_FORWARD_PID' EXIT
+          sleep 8
+          node scripts/production-readiness.mjs smoke
+
+      - name: Roll back app deployments on failure
+        if: ${{ failure() }}
+        run: |
+          kubectl rollout undo deployment/chronogram-memory-api -n chronogram || true
+          kubectl rollout undo deployment/chronogram-worker -n chronogram || true
+          kubectl rollout status deployment/chronogram-memory-api -n chronogram --timeout=180s || true
+          kubectl rollout status deployment/chronogram-worker -n chronogram --timeout=180s || true

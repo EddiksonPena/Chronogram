@@ -1,0 +1,76 @@
+groups:
+  - name: chronogram-slo-recording
+    interval: 30s
+    rules:
+      - record: chronogram:module_workflow_failure_rate_1h
+        expr: |
+          increase(chronogram_module_workflow_failed_total[1h])
+          /
+          clamp_min(increase(chronogram_module_workflow_scheduled_total[1h]), 1)
+      - record: chronogram:module_ingest_latency_ms:max_15m
+        expr: max_over_time(chronogram_module_average_ingest_latency_ms[15m])
+      - record: chronogram:module_recall_latency_ms:max_15m
+        expr: max_over_time(chronogram_module_average_recall_latency_ms[15m])
+
+  - name: chronogram-alerts
+    interval: 30s
+    rules:
+      - alert: ChronogramTargetDown
+        expr: up{job=~"chronogram-memory-api|chronogram-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: chronogram
+        annotations:
+          summary: Chronogram target is down
+          description: '{{ $labels.job }} on {{ $labels.instance }} has been unreachable for more than 2 minutes.'
+
+      - alert: ChronogramWorkflowFailures
+        expr: increase(chronogram_module_workflow_failed_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: chronogram
+        annotations:
+          summary: Chronogram workflow failures detected
+          description: 'Module {{ $labels.module }} on {{ $labels.service }} recorded workflow failures in the last 15 minutes.'
+
+      - alert: ChronogramWorkflowFailureRateHigh
+        expr: chronogram:module_workflow_failure_rate_1h > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: chronogram
+        annotations:
+          summary: Chronogram workflow failure rate is above SLO
+          description: 'Module {{ $labels.module }} exceeded a 5% workflow failure rate over the last hour.'
+
+      - alert: ChronogramWorkflowBacklogHigh
+        expr: sum by (module, service) (chronogram_workflow_runs{status="scheduled"}) > 5
+        for: 10m
+        labels:
+          severity: warning
+          service: chronogram
+        annotations:
+          summary: Chronogram workflow backlog is building
+          description: 'Module {{ $labels.module }} has more than 5 scheduled workflow runs retained on {{ $labels.service }}.'
+
+      - alert: ChronogramIngestLatencyHigh
+        expr: chronogram:module_ingest_latency_ms:max_15m > 250
+        for: 15m
+        labels:
+          severity: warning
+          service: chronogram
+        annotations:
+          summary: Chronogram ingest latency is above target
+          description: 'Module {{ $labels.module }} exceeded 250 ms average ingest latency during the last 15 minutes.'
+
+      - alert: ChronogramRecallLatencyHigh
+        expr: chronogram:module_recall_latency_ms:max_15m > 200
+        for: 15m
+        labels:
+          severity: warning
+          service: chronogram
+        annotations:
+          summary: Chronogram recall latency is above target
+          description: 'Module {{ $labels.module }} exceeded 200 ms average recall latency during the last 15 minutes.'

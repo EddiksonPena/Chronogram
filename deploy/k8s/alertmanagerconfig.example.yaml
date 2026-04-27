@@ -1,0 +1,37 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: chronogram
+  namespace: chronogram
+spec:
+  route:
+    receiver: chronogram-default
+    groupBy:
+      - alertname
+      - severity
+      - service
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    routes:
+      - receiver: chronogram-critical
+        matchers:
+          - name: severity
+            value: critical
+      - receiver: chronogram-warning
+        matchers:
+          - name: severity
+            value: warning
+  receivers:
+    - name: chronogram-default
+      webhookConfigs:
+        - url: https://alerts.example.com/chronogram/default
+          sendResolved: true
+    - name: chronogram-warning
+      webhookConfigs:
+        - url: https://alerts.example.com/chronogram/warning
+          sendResolved: true
+    - name: chronogram-critical
+      webhookConfigs:
+        - url: https://alerts.example.com/chronogram/critical
+          sendResolved: true

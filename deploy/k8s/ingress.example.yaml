@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chronogram-memory-api
+  namespace: chronogram
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  tls:
+    - hosts:
+        - chronogram.example.com
+      secretName: chronogram-tls
+  rules:
+    - host: chronogram.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: chronogram-memory-api
+                port:
+                  number: 4000

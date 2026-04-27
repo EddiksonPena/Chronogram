@@ -1,0 +1,32 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chronogram-memory-api
+  namespace: chronogram
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chronogram-memory-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chronogram-worker
+  namespace: chronogram
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chronogram-worker
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chronogram-temporal
+  namespace: chronogram
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chronogram-temporal

@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: chronogram-memory-api
+  namespace: chronogram
+spec:
+  selector:
+    matchLabels:
+      app: chronogram-memory-api
+  namespaceSelector:
+    matchNames:
+      - chronogram
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      honorLabels: true
+      bearerTokenSecret:
+        name: chronogram-secrets
+        key: api-key
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: chronogram-worker
+  namespace: chronogram
+spec:
+  selector:
+    matchLabels:
+      app: chronogram-worker
+  namespaceSelector:
+    matchNames:
+      - chronogram
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      honorLabels: true
+      bearerTokenSecret:
+        name: chronogram-secrets
+        key: api-key

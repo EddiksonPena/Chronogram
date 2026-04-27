@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chronogram Onboarding</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Chronogram Onboarding</p>
+        <h1>Bootstrap the stack, verify the services, and wire a harness in one place.</h1>
+        <p class="lede">
+          This local control panel sits on top of the same bootstrap logic used by the CLI, so the
+          status checks and generated harness snippets stay aligned.
+        </p>
+        <div class="actions">
+          <button id="init-button">Run Full Bootstrap</button>
+          <button id="refresh-button" class="secondary">Refresh Status</button>
+          <button id="down-button" class="ghost">Stop App Stack</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <div class="card-head">
+            <h2>Prerequisites</h2>
+            <span id="checks-summary" class="pill">Checking</span>
+          </div>
+          <div id="checks-list" class="stack"></div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <h2>Service Health</h2>
+            <span id="services-summary" class="pill">Checking</span>
+          </div>
+          <div id="services-list" class="stack"></div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card wide">
+          <div class="card-head">
+            <h2>Harness Connection</h2>
+            <span class="pill accent">Generated</span>
+          </div>
+          <p class="muted">
+            Use these snippets to plug Chronogram into a harness over HTTP. The current repo does
+            not ship a native MCP facade yet, so the generated bundle is HTTP-first by design.
+          </p>
+          <div id="snippets" class="snippet-grid"></div>
+        </article>
+
+        <article class="card wide">
+          <div class="card-head">
+            <h2>Activity</h2>
+            <span class="pill">Live</span>
+          </div>
+          <pre id="log-output" class="log">Loading...</pre>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chronogram-worker
+  namespace: chronogram
+  labels:
+    app: chronogram-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chronogram-worker
+  template:
+    metadata:
+      labels:
+        app: chronogram-worker
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: ghcr.io/chronogram/chronogram-worker:latest
+          ports:
+            - name: http
+              containerPort: 4010
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: chronogram-config
+          env:
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: chronogram-secrets
+                  key: neo4j-password
+            - name: CHRONOGRAM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chronogram-secrets
+                  key: api-key
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4010
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4010
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1.5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chronogram-worker
+  namespace: chronogram
+  labels:
+    app: chronogram-worker
+spec:
+  selector:
+    app: chronogram-worker
+  ports:
+    - name: http
+      port: 4010
+      targetPort: 4010

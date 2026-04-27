@@ -1,0 +1,27 @@
+{
+  "name": "chronogram",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "chronogram:connect": "node scripts/bootstrap.mjs connect",
+    "chronogram:doctor": "node scripts/bootstrap.mjs doctor",
+    "chronogram:init": "node scripts/bootstrap.mjs init",
+    "chronogram:load": "node scripts/production-readiness.mjs load",
+    "chronogram:preflight": "node scripts/production-readiness.mjs preflight",
+    "chronogram:smoke": "node scripts/production-readiness.mjs smoke",
+    "chronogram:ui": "node scripts/bootstrap.mjs ui",
+    "dev": "pnpm --parallel --filter @chronogram/memory-api --filter @chronogram/worker dev",
+    "start:memory-api": "pnpm --filter @chronogram/memory-api start",
+    "start:worker": "pnpm --filter @chronogram/worker start",
+    "lint": "pnpm -r lint",
+    "test": "tsx --test \"packages/core/src/**/*.test.ts\"",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^24.8.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

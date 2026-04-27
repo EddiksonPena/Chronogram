@@ -1,0 +1,35 @@
+name: Promote Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Released image tag to promote
+        required: true
+        type: string
+      deploy_platform:
+        description: Apply the self-hosted platform reference during promotion
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  deploy_staging:
+    name: Deploy To Staging
+    uses: ./.github/workflows/deploy-reference.yml
+    with:
+      environment: staging
+      deploy_platform: ${{ inputs.deploy_platform }}
+      image_tag: ${{ inputs.image_tag }}
+    secrets: inherit
+
+  deploy_production:
+    name: Promote To Production
+    needs:
+      - deploy_staging
+    uses: ./.github/workflows/deploy-reference.yml
+    with:
+      environment: production
+      deploy_platform: ${{ inputs.deploy_platform }}
+      image_tag: ${{ inputs.image_tag }}
+    secrets: inherit
