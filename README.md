@@ -1,5 +1,7 @@
 # Chronogram
 
+![Chronogram cover](docs/assets/chronogram-cover.png)
+
 ![Node.js](https://img.shields.io/badge/Node.js-5FA04E?logo=nodedotjs&logoColor=white)
 ![Temporal](https://img.shields.io/badge/Temporal-000000?logo=temporal&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)
@@ -51,6 +53,10 @@ Chronogram addresses that by:
 - exposing health, workflow, and module metrics endpoints
 
 ## Architecture
+
+![Chronogram architecture diagram](docs/assets/chronogram-architecture-diagram.png)
+
+Reference flow, in text form:
 
 ```mermaid
 flowchart TD
