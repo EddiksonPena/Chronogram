@@ -54,51 +54,58 @@ Chronogram addresses that by:
 
 ## Architecture
 
-![Chronogram architecture diagram](docs/assets/chronogram-architecture-diagram.png)
-
-Reference flow, in text form:
-
 ```mermaid
-flowchart TD
+flowchart TB
     A["Agent Harness"]
-    B["Memory API"]
+    B["Memory API Service<br/>HTTP ingest, recall, feedback, metrics"]
 
     A --> B
 
-    subgraph C["Memory Control Plane"]
+    subgraph C["Chronogram Control Plane"]
         direction LR
-        C1["Ingestion"]
-        C2["Retrieval Orchestrator"]
-        C3["Lifecycle + Feedback"]
-        C4["Governance + Provenance"]
+        C1["Ingestion Pipeline<br/>normalize, chunk, route"]
+        C2["Retrieval Orchestrator<br/>hybrid search, rerank, assemble context"]
+        C3["Lifecycle + Feedback<br/>salience, compaction, promotion"]
+        C4["Governance + Auth<br/>API key or JWT, provenance, scopes"]
     end
 
     subgraph D["Memory Data Plane"]
         direction LR
-        D1["Redis<br/>Working Memory"]
-        D2["Weaviate<br/>Semantic Store"]
-        D3["Neo4j<br/>Graph Store"]
+        D1["Redis<br/>working memory + shared state"]
+        D2["Weaviate<br/>semantic retrieval"]
+        D3["Neo4j<br/>graph memory"]
     end
 
-    subgraph E["Temporal Workflows"]
+    subgraph E["Background Execution"]
         direction LR
-        E1["Reindex"]
-        E2["Deduplication"]
-        E3["Lifecycle Jobs"]
-        E4["Evaluation Runs"]
+        E1["Worker Service<br/>workflow execution, reindex, maintenance"]
+        E2["Temporal Service<br/>task queue + orchestration"]
+    end
+
+    subgraph F["Operations"]
+        direction LR
+        F1["Prometheus + Grafana<br/>metrics, dashboards, alerts"]
+        F2["Docker Compose / Kubernetes<br/>local stack + deployment references"]
     end
 
     B --> C
     C --> D
-    C --> E
+    C --> E1
+    E1 <--> E2
+    B --> F1
+    E1 --> F1
+    D --> F2
+    E2 --> F2
 
-    classDef top fill:#0a1320,stroke:#4c8dff,color:#f8fbff,stroke-width:2px;
-    classDef control fill:#051a12,stroke:#2fd66b,color:#7dff9d,stroke-width:2px;
-    classDef controlItem fill:#0a2418,stroke:#2aa85a,color:#ecfff1,stroke-width:1.5px;
-    classDef data fill:#140b24,stroke:#9d63ff,color:#d9bcff,stroke-width:2px;
-    classDef dataItem fill:#1d1236,stroke:#8d58f5,color:#f5edff,stroke-width:1.5px;
-    classDef workflow fill:#241507,stroke:#ffad3b,color:#ffc86a,stroke-width:2px;
-    classDef workflowItem fill:#321d0d,stroke:#d98924,color:#fff3e1,stroke-width:1.5px;
+    classDef top fill:#0a1220,stroke:#4f8cff,color:#f7fbff,stroke-width:2px;
+    classDef control fill:#071910,stroke:#35db72,color:#82ffad,stroke-width:2px;
+    classDef controlItem fill:#0d2418,stroke:#2da85c,color:#f1fff5,stroke-width:1.5px;
+    classDef data fill:#160d27,stroke:#9f67ff,color:#dcbfff,stroke-width:2px;
+    classDef dataItem fill:#1f1336,stroke:#8d57f2,color:#f7efff,stroke-width:1.5px;
+    classDef workflow fill:#261607,stroke:#ffad3b,color:#ffc86f,stroke-width:2px;
+    classDef workflowItem fill:#341f0d,stroke:#d98a24,color:#fff4e3,stroke-width:1.5px;
+    classDef ops fill:#091424,stroke:#3aa0ff,color:#bfe1ff,stroke-width:2px;
+    classDef opsItem fill:#10203a,stroke:#4e8fe4,color:#eef6ff,stroke-width:1.5px;
 
     class A,B top;
     class C control;
@@ -106,12 +113,19 @@ flowchart TD
     class D data;
     class D1,D2,D3 dataItem;
     class E workflow;
-    class E1,E2,E3,E4 workflowItem;
+    class E1,E2 workflowItem;
+    class F ops;
+    class F1,F2 opsItem;
 
-    linkStyle 0 stroke:#73b7ff,stroke-width:2px
-    linkStyle 1 stroke:#4de879,stroke-width:2px
-    linkStyle 2 stroke:#b07bff,stroke-width:2px
-    linkStyle 3 stroke:#ffb657,stroke-width:2px
+    linkStyle 0 stroke:#74b9ff,stroke-width:2px
+    linkStyle 1 stroke:#49e77a,stroke-width:2px
+    linkStyle 2 stroke:#b57cff,stroke-width:2px
+    linkStyle 3 stroke:#ffb85c,stroke-width:2px
+    linkStyle 4 stroke:#ffb85c,stroke-width:2px
+    linkStyle 5 stroke:#67b5ff,stroke-width:2px
+    linkStyle 6 stroke:#67b5ff,stroke-width:2px
+    linkStyle 7 stroke:#7f9cff,stroke-width:2px
+    linkStyle 8 stroke:#7f9cff,stroke-width:2px
 ```
 
 ## Current Scope
