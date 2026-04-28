@@ -54,6 +54,16 @@ Chronogram addresses that by:
 
 ## Architecture
 
+Chronogram is a two-service runtime: the `memory-api` handles front-door ingest and recall requests, and the `worker` handles asynchronous maintenance and workflow execution.
+
+At a high level:
+
+- the agent harness only talks to Chronogram through the Memory API
+- the control plane decides how memory is ingested, retrieved, governed, and compacted
+- the data plane persists working, semantic, and graph memory in the right substrate
+- Temporal and the worker handle reindexing, maintenance, and background lifecycle jobs
+- Prometheus, Grafana, Docker Compose, and Kubernetes support operations around the core runtime
+
 ```mermaid
 flowchart TB
     A["Agent Harness"]
@@ -127,6 +137,8 @@ flowchart TB
     linkStyle 7 stroke:#7f9cff,stroke-width:2px
     linkStyle 8 stroke:#7f9cff,stroke-width:2px
 ```
+
+This diagram is the reference architecture for the current repository. More detailed behavior, heuristics, and request flows are documented in [docs/architecture/system-overview.md](docs/architecture/system-overview.md).
 
 ## Current Scope
 
