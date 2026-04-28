@@ -60,23 +60,58 @@ Reference flow, in text form:
 
 ```mermaid
 flowchart TD
-    A["Agent Harness"] --> B["Memory API"]
-    B --> C["Memory Control Plane"]
-    C --> C1["Ingestion"]
-    C --> C2["Retrieval Orchestrator"]
-    C --> C3["Lifecycle + Feedback"]
-    C --> C4["Governance + Provenance"]
+    A["Agent Harness"]
+    B["Memory API"]
 
-    C --> D["Memory Data Plane"]
-    D --> D1["Redis\nWorking Memory"]
-    D --> D2["Weaviate\nSemantic Store"]
-    D --> D3["Neo4j\nGraph Store"]
+    A --> B
 
-    C --> E["Temporal Workflows"]
-    E --> E1["Reindex"]
-    E --> E2["Deduplication"]
-    E --> E3["Lifecycle Jobs"]
-    E --> E4["Evaluation Runs"]
+    subgraph C["Memory Control Plane"]
+        direction LR
+        C1["Ingestion"]
+        C2["Retrieval Orchestrator"]
+        C3["Lifecycle + Feedback"]
+        C4["Governance + Provenance"]
+    end
+
+    subgraph D["Memory Data Plane"]
+        direction LR
+        D1["Redis<br/>Working Memory"]
+        D2["Weaviate<br/>Semantic Store"]
+        D3["Neo4j<br/>Graph Store"]
+    end
+
+    subgraph E["Temporal Workflows"]
+        direction LR
+        E1["Reindex"]
+        E2["Deduplication"]
+        E3["Lifecycle Jobs"]
+        E4["Evaluation Runs"]
+    end
+
+    B --> C
+    C --> D
+    C --> E
+
+    classDef top fill:#0a1320,stroke:#4c8dff,color:#f8fbff,stroke-width:2px;
+    classDef control fill:#051a12,stroke:#2fd66b,color:#7dff9d,stroke-width:2px;
+    classDef controlItem fill:#0a2418,stroke:#2aa85a,color:#ecfff1,stroke-width:1.5px;
+    classDef data fill:#140b24,stroke:#9d63ff,color:#d9bcff,stroke-width:2px;
+    classDef dataItem fill:#1d1236,stroke:#8d58f5,color:#f5edff,stroke-width:1.5px;
+    classDef workflow fill:#241507,stroke:#ffad3b,color:#ffc86a,stroke-width:2px;
+    classDef workflowItem fill:#321d0d,stroke:#d98924,color:#fff3e1,stroke-width:1.5px;
+
+    class A,B top;
+    class C control;
+    class C1,C2,C3,C4 controlItem;
+    class D data;
+    class D1,D2,D3 dataItem;
+    class E workflow;
+    class E1,E2,E3,E4 workflowItem;
+
+    linkStyle 0 stroke:#73b7ff,stroke-width:2px
+    linkStyle 1 stroke:#4de879,stroke-width:2px
+    linkStyle 2 stroke:#b07bff,stroke-width:2px
+    linkStyle 3 stroke:#ffb657,stroke-width:2px
 ```
 
 ## Current Scope
