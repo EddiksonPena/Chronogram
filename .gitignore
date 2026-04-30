@@ -12,3 +12,4 @@ tmp
 undefined
 __pycache__
 *.pyc
+.venv
