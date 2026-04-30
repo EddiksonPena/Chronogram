@@ -21,7 +21,7 @@
       "args": [
         "run",
         "--directory",
-        "./mcp-server",
+        "../../mcp-server",
         "python",
         "server.py"
       ],
