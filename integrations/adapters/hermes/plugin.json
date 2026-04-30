@@ -37,7 +37,7 @@
   "hooks": {
     "session_start": {
       "script": "hooks/chronogram_bootstrap.py",
-      "description": "Bootstrap context: recall user profile, project conventions, and recent decisions from Chronogram. Inject into system prompt."
+      "description": "Guard + bootstrap: validate Chronogram API health, verify MCP tools are wired, force-discovery warning if not. Recall user profile + project conventions. Inject into system prompt."
     },
     "post_tool_call": {
       "script": "hooks/mcp_result_filter.py",
