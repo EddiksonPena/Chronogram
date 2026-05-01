@@ -40,9 +40,9 @@
       "description": "Guard + bootstrap: validate Chronogram API health, verify MCP tools are wired, force-discovery warning if not. Recall user profile + project conventions. Inject into system prompt."
     },
     "post_tool_call": {
-      "script": "hooks/mcp_result_filter.py",
-      "matcher": "mcp_chronogram_*",
-      "description": "Filter large Chronogram recall results through code-level summarization before they reach the context window."
+      "script": "hooks/tool_capture.py",
+      "matcher": "*",
+      "description": "Capture ALL tool calls to Chronogram as episodic memories. Filter large MCP recall results before they hit context."
     },
     "context_pressure": {
       "script": "hooks/auto_compact.py",

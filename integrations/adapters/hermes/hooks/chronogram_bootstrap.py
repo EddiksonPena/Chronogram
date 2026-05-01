@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Session-start hook: bootstrap context from Chronogram + MCP discovery guard.
-Reads session context from stdin, recalls user profile + project conventions,
-verifies Chronogram MCP tools are wired, and injects results into the system prompt.
+session_start hook: validate Chronogram is wired + recall context.
+Hermes sends JSON on stdin: {session_id, cwd, tools, ...}
+Validates 3 layers (API, config, MCP tools), recalls user/project memory.
 """
 import json
 import os
@@ -11,83 +11,53 @@ import urllib.request
 import urllib.error
 
 CHRONOGRAM_URL = "http://127.0.0.1:4000"
-USER_PROFILE_SCOPE = "user-profile"
-PROJECT_SCOPE_PREFIX = "project:"
-PLUGIN_SCOPE = "plugin:chronogram-memory-system"
-MCP_TOOL_PREFIX = "mcp_chronogram_"
 
 
-def check_chronogram_health():
-    """Health-check Chronogram API. Returns (ok, detail)."""
+def check_health():
     try:
-        req = urllib.request.Request(
-            f"{CHRONOGRAM_URL}/health",
-            method="GET"
-        )
+        req = urllib.request.Request(f"{CHRONOGRAM_URL}/health", method="GET")
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read())
-            if data.get("status") == "ok":
-                memory = data.get("memory", {})
-                return True, f"healthy — {memory.get('artifactCount', '?')} artifacts"
-            return False, f"unhealthy: {data.get('status')}"
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
-        return False, f"unreachable: {e}"
+        if data.get("status") == "ok":
+            mem = data.get("memory", {})
+            return True, f"healthy — {mem.get('artifactCount', '?')} artifacts"
+        return False, f"unhealthy: {data.get('status')}"
     except Exception as e:
-        return False, f"error: {e}"
+        return False, f"unreachable: {e}"
 
 
-def check_mcp_tools_available(ctx):
-    """Check if mcp_chronogram_* tools are in the session tool list."""
-    tools = ctx.get("tools", [])
-    chronogram_tools = [t for t in tools if t.startswith(MCP_TOOL_PREFIX)]
-    return bool(chronogram_tools), chronogram_tools
+def check_mcp_tools(tools):
+    chrono = [t for t in tools if t.startswith("mcp_chronogram_")]
+    return bool(chrono), chrono
 
 
-def check_config_has_chronogram():
-    """Check if config.yaml has mcp_servers.chronogram."""
+def check_config():
     config_path = os.path.expanduser("~/.hermes/config.yaml")
     try:
         with open(config_path) as f:
-            content = f.read()
-        return "chronogram:" in content and "mcp_servers:" in content
+            return ("chronogram:" in f.read() and "mcp_servers:" in f.read())
     except Exception:
         return False
 
 
 def recall_from_chronogram(scope, query, label):
-    """Recall from Chronogram API. Returns injection string or error."""
     try:
         req = urllib.request.Request(
             f"{CHRONOGRAM_URL}/v1/memories/recall",
-            data=json.dumps({
-                "query": query,
-                "scope": scope,
-                "includeDiagnostics": False
-            }).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST"
+            data=json.dumps({"query": query, "scope": scope, "includeDiagnostics": False}).encode(),
+            headers={"Content-Type": "application/json"}, method="POST"
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
-            items = data.get("context", [])
-            if items:
-                top = items[0].get("content", "")
-                return f"[{label}] {top[:300]}"
-    except Exception as e:
-        pass  # Continue without Chronogram — non-fatal
+        items = data.get("context", [])
+        if items:
+            return f"[{label}] {items[0].get('content', '')[:300]}"
+    except Exception:
+        pass
     return None
 
 
-def detect_project(cwd):
-    """Extract project name from working directory."""
-    if "/projects/" in cwd:
-        parts = cwd.split("/projects/")[-1].split("/")[0]
-        if parts:
-            return parts
-    return None
-
-
-# ── Main ──────────────────────────────────────────────
+# ── Main ──
 try:
     ctx = json.load(sys.stdin)
 except json.JSONDecodeError:
@@ -96,84 +66,57 @@ except json.JSONDecodeError:
 
 session_id = ctx.get("session_id", "unknown")
 cwd = ctx.get("cwd", os.getcwd())
+tools = ctx.get("tools", [])
 
 injections = []
-discovery_issues = []
+issues = []
 
-# Phase 1: Chronogram service health
-api_ok, api_detail = check_chronogram_health()
-if api_ok:
-    injections.append(f"[chronogram-api] {api_detail}")
-else:
-    injections.append(f"[chronogram-api] {api_detail}")
-    discovery_issues.append(
-        "Chronogram API is not reachable. Start it with: docker compose up -d"
-    )
+# Layer 1: API health
+api_ok, api_detail = check_health()
+injections.append(f"[chronogram-api] {api_detail}")
+if not api_ok:
+    issues.append("Chronogram API not reachable. Run: docker compose up -d")
 
-# Phase 2: MCP config check
-config_ok = check_config_has_chronogram()
-if config_ok:
-    injections.append("[chronogram-mcp] config.yaml has mcp_servers.chronogram entry ✓")
-else:
-    discovery_issues.append(
-        "MCP server not in config. Run: hermes config set mcp_servers.chronogram.command uv"
-    )
+# Layer 2: Config check
+config_ok = check_config()
+injections.append(f"[chronogram-config] {'✓ wired' if config_ok else '✗ missing'}")
+if not config_ok:
+    issues.append("MCP server missing from config.yaml")
 
-# Phase 3: MCP tool availability
-tools_ok, chronogram_tools = check_mcp_tools_available(ctx)
+# Layer 3: MCP tools
+tools_ok, chrono_tools = check_mcp_tools(tools)
 if tools_ok:
-    injections.append(
-        f"[chronogram-mcp] {len(chronogram_tools)} tools available: "
-        f"{', '.join(chronogram_tools)}"
-    )
+    injections.append(f"[chronogram-mcp] {len(chrono_tools)} tools: {', '.join(chrono_tools)}")
 else:
-    discovery_issues.append(
-        "CHRONOGRAM MCP TOOLS NOT DISCOVERED. "
-        "In chat, run slash command: /reload-mcp"
-    )
+    issues.append("CHRONOGRAM MCP TOOLS NOT DISCOVERED. Run /reload-mcp in chat.")
 
-if not tools_ok and discovery_issues:
-    injections.append(
-        "\n## ⚠️ CHRONOGRAM DISCOVERY WARNING\n"
-        + "\n".join(f"- {issue}" for issue in discovery_issues)
-    )
+# Warning block
+if issues:
+    injections.append("\n## ⚠️ CHRONOGRAM DISCOVERY WARNING\n" + "\n".join(f"- {i}" for i in issues))
 
-# Phase 4: Memory recall
-project = detect_project(cwd)
+# Memory recall
+project = None
+if "/projects/" in cwd:
+    parts = cwd.split("/projects/")[-1].split("/")[0]
+    if parts:
+        project = parts
 
-result = recall_from_chronogram(
-    USER_PROFILE_SCOPE,
-    "user preferences, tools, conventions, and style",
-    "user-profile"
-)
-if result:
-    injections.append(result)
+recalled = recall_from_chronogram("user-profile", "user preferences, tools, conventions, style", "user-profile")
+if recalled:
+    injections.append(recalled)
 
 if project:
-    result = recall_from_chronogram(
-        f"{PROJECT_SCOPE_PREFIX}{project}",
-        f"conventions, decisions, and standards for project '{project}'",
-        f"project:{project}"
-    )
-    if result:
-        injections.append(result)
+    recalled = recall_from_chronogram(f"project:{project}", f"conventions and decisions for {project}", f"project:{project}")
+    if recalled:
+        injections.append(recalled)
 
-# Return
-output = {
+print(json.dumps({
     "ok": True,
-    "inject_into_system_prompt": "\n".join(injections) if injections else "",
+    "inject_into_system_prompt": "\n".join(injections),
     "metadata": {
-        "chronogram_bootstrap": {
-            "session_id": session_id,
-            "api_ok": api_ok,
-            "config_ok": config_ok,
-            "tools_ok": tools_ok,
-            "mcp_tools": chronogram_tools if tools_ok else [],
-            "project": project,
-            "action_required": not tools_ok,
-        }
+        "api_ok": api_ok, "config_ok": config_ok,
+        "tools_ok": tools_ok, "mcp_tools": chrono_tools if tools_ok else [],
+        "project": project, "action_required": not tools_ok
     }
-}
-
-print(json.dumps(output))
+}))
 sys.exit(0)

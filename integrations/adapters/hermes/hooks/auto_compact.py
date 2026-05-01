@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Context pressure hook: auto-compact working memory to Chronogram.
-When occupancy crosses threshold (default 70%), compacts recent messages
-into Chronogram's durable memory stores and returns a working summary
-so the agent can continue without losing context.
 """
-import json, sys, os, urllib.request
+Context pressure hook: auto-compact conversation to Chronogram when occupancy exceeds 70%.
+Receives: {occupancy_ratio, session_id, messages, ...}
+Compacts actual conversation messages into Chronogram's durable memory.
+"""
+import json
+import sys
+import urllib.request
+import urllib.error
 
 CHRONOGRAM_URL = "http://127.0.0.1:4000"
-DEFAULT_THRESHOLD = 0.70
+COMPACT_THRESHOLD = 0.70
 
 try:
     ctx = json.load(sys.stdin)
@@ -17,47 +20,49 @@ except json.JSONDecodeError:
 
 occupancy = ctx.get("occupancy_ratio", 0)
 session_id = ctx.get("session_id", "unknown")
-threshold = ctx.get("threshold", DEFAULT_THRESHOLD)
+messages = ctx.get("messages", [])
+threshold = ctx.get("threshold", COMPACT_THRESHOLD)
 
-# Only trigger if above threshold
 if occupancy < threshold:
-    print(json.dumps({"ok": True, "triggered": False}))
+    print(json.dumps({"ok": True, "triggered": False, "reason": f"occupancy {occupancy:.2f} < threshold {threshold}"}))
     sys.exit(0)
 
-# Build minimal compact payload
-# In a real implementation, the hook would have access to recent messages.
-# Here we call Chronogram's compact endpoint with a placeholder — the actual
-# messages would come from Hermes' context manager.
+# Build summary of what's being compacted
+message_count = len(messages)
+preview = " ".join(m.get("content", "")[:200] for m in messages[-6:]) if messages else "empty conversation"
+
 compact_payload = {
     "scope": "workspace",
     "occupancyRatio": occupancy,
     "sessionId": session_id,
-    "messages": [
-        {"role": "system", "content": f"Context at {occupancy*100:.0f}% occupancy. Compacting to free space."}
-    ]
+    "messages": messages[-40:]  # Last 40 messages to keep payload reasonable
 }
 
 try:
     req = urllib.request.Request(
         f"{CHRONOGRAM_URL}/v1/memories/compact",
         data=json.dumps(compact_payload).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST"
+        headers={"Content-Type": "application/json"}, method="POST"
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read())
 
     output = {
         "ok": True,
         "triggered": data.get("triggered", False),
-        "compacted_summary": data.get("workingSummary", "Context compacted."),
+        "compacted_summary": data.get("workingSummary", f"Context compacted at {occupancy:.0%} occupancy."),
         "open_loops": data.get("openLoops", []),
+        "promoted": data.get("promoted", {}),
+        "stats": {
+            "messages_compacted": message_count,
+            "occupancy_before": occupancy,
+            "preview": preview[:200]
+        }
     }
     print(json.dumps(output))
     sys.exit(0)
 
 except Exception as e:
-    # Chronogram unavailable — pass through
     print(json.dumps({
         "ok": True,
         "triggered": False,
