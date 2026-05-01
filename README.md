@@ -1,6 +1,6 @@
 # Chronogram
 
-![Chronogram cover](docs/assets/chronogram-cover.png)
+![Chronogram cover](https://raw.githubusercontent.com/EddiksonPena/Chronogram/main/docs/assets/chronogram-cover.png)
 
 ![Node.js](https://img.shields.io/badge/Node.js-5FA04E?logo=nodedotjs&logoColor=white)
 ![Temporal](https://img.shields.io/badge/Temporal-000000?logo=temporal&logoColor=white)
@@ -64,9 +64,9 @@ At a high level:
 - Temporal and the worker handle reindexing, maintenance, and background lifecycle jobs
 - Prometheus, Grafana, Docker Compose, and Kubernetes support operations around the core runtime
 
-![Reference architecture: Chronogram interface, API, control plane, data plane, execution plane, operations](docs/assets/architecture-reference.png)
+![Reference architecture: Chronogram interface, API, control plane, data plane, execution plane, operations](https://raw.githubusercontent.com/EddiksonPena/Chronogram/main/docs/assets/architecture-reference.png)
 
-Editable source: [`docs/assets/architecture-reference.svg`](docs/assets/architecture-reference.svg)
+Editable vector source (checked into this repo): [`docs/assets/architecture-reference.svg`](https://github.com/EddiksonPena/Chronogram/blob/main/docs/assets/architecture-reference.svg)
 
 The diagram stacks **interface → API → control → data execution** planes: solid edges are typical synchronous request paths during ingest/recall; dotted edges emphasize lifecycle maintenance, telemetry, and orchestration hops. Operational packaging (Compose/K8s) sits alongside Grafana/Prometheus. Chronogram aims for **hybrid retrieval**, **adaptive memory**, **background cognition**, and **governance** atop that substrate—see [docs/architecture/system-overview.md](docs/architecture/system-overview.md) for flows, limits, and heuristics wired into this codebase.
 
