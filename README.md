@@ -25,6 +25,7 @@ Use it when you want one **ingest / recall / feedback / compaction** contract in
 - [Quick start](#quick-start)
 - [Authenticate your requests](#authenticate-your-requests)
 - [Using the Memory API](#using-the-memory-api)
+- [Integrations appendix](#integrations-openai-langgraph-crewai-style)
 - [Architecture](#architecture)
 - [Ports](#ports-reference)
 - [Onboarding tooling](#onboarding-tooling)
@@ -254,6 +255,12 @@ Worker highlights:
 
 ---
 
+## Integrations (OpenAI, LangGraph, CrewAI-style)
+
+Chronogram is transport-agnostic HTTP. For **recall → augment prompt → respond → ingest** wiring with popular agent stacks, copy the patterns in [**`docs/integration/harness-integrations.md`**](docs/integration/harness-integrations.md) (minimal `fetch` helpers, an OpenAI Chat Completions example using `openai` on npm, LangGraph-style graph notes, and Crew-style tool hooks).
+
+---
+
 ## Architecture
 
 Services:
@@ -419,6 +426,7 @@ Use this framing in internal reviews and stakeholder updates so expectations sta
 
 ## Documentation
 
+- [**Harness integrations (OpenAI / LangGraph-style / CrewAI-style)**](docs/integration/harness-integrations.md)
 - [**Setup & day-two usage**](docs/setup/setup-and-usage.md)
 - [**System overview & heuristics**](docs/architecture/system-overview.md)
 - [**Production readiness checklist**](docs/deployment/production-readiness.md)
