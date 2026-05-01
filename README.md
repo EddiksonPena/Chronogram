@@ -2,7 +2,7 @@
 
 ![Chronogram cover](https://raw.githubusercontent.com/EddiksonPena/Chronogram/main/docs/assets/chronogram-cover.png)
 
-![Node.js](https://img.shields.io/badge/Node.js-5FA04E?logo=nodedotjs&logoColor=white)
+[![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 ![Temporal](https://img.shields.io/badge/Temporal-000000?logo=temporal&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)
 ![Weaviate](https://img.shields.io/badge/Weaviate-00C4B3?logo=weaviate&logoColor=white)
@@ -11,267 +11,142 @@
 ![License](https://img.shields.io/badge/license-MIT-black)
 ![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)
 
-`Chronogram` is a memory operating system for agents.
+**Chronogram** is memory infrastructure for autonomous agents and LLM-backed applications—a single HTTP memory API layered over Redis (working memory), Weaviate (semantic recall), Neo4j (graph memory), and Temporal (background workflows).
 
-It gives an agent stack one control plane for memory instead of forcing every agent to talk to `Redis`, `Weaviate`, `Neo4j`, and `Temporal` directly.
+Use it when you want one **ingest / recall / feedback / compaction** contract instead of wiring each datastore and maintenance job yourself.
 
-## In One Sentence
+---
 
-Chronogram ingests raw interactions, turns them into structured memory, stores them across multiple substrates, retrieves the right context later, and runs background maintenance workflows to keep that memory useful over time.
+## Table of contents
 
-## What This Is
+- [Overview](#overview)
+- [Who this is for](#who-this-is-for)
+- [What you get (and what you do not)](#what-you-get-and-what-you-do-not)
+- [Quick start](#quick-start)
+- [Authenticate your requests](#authenticate-your-requests)
+- [Using the Memory API](#using-the-memory-api)
+- [Architecture](#architecture)
+- [Ports](#ports-reference)
+- [Onboarding tooling](#onboarding-tooling)
+- [Build, package, deploy](#build-package-deploy)
+- [Operational validation](#operational-validation)
+- [Monitoring](#monitoring)
+- [Security & hardening](#security--hardening)
+- [Release maturity](#release-maturity)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
 
-Chronogram is:
+---
 
-- a front-door memory API for agent applications
-- a retrieval and routing layer across multiple memory backends
-- a lifecycle manager for reinforcement, feedback, reindexing, and compaction
-- a local-first developer stack you can run on one machine
+## Overview
 
-Chronogram is not:
+Chronogram **ingests** experiences and conversation context, **routes** artifacts into the right substrates, **recalls** blended context across lexical, semantic, graph, and recency signals, and **runs workflows** that reindex, compact, and promote durable memory.
 
-- just a vector database
-- just a graph store
-- just a RAG wrapper
-- a finished multi-tenant SaaS platform
+The runtime is intentionally **two services**: `memory-api` (online ingest/recall paths) and `worker` (async maintenance orchestrated via Temporal).
 
-## What Problems It Solves
+## Who this is for
 
-Without a memory control plane, agent systems usually end up with:
+Chronogram is aimed at engineers who need:
 
-- fragmented memory spread across incompatible tools
-- no clear distinction between working, episodic, semantic, and procedural memory
-- weak lifecycle behavior after initial ingestion
-- poor observability into what was stored, recalled, or promoted
+- **Local-first development** — run the stack on one machine with Docker Compose plus two Node processes.
+- **Integration testing** — hit stable HTTP endpoints while swapping embeddings and models behind the control plane.
+- **Reference deployments** — use container images and Kubernetes manifests as templates, then harden them for your environment.
 
-Chronogram addresses that by:
+It is **not** a turnkey multi-tenant SaaS. Plan to supply identity, tenancy, quotas, backups, and production-grade infra around the manifests this repo publishes.
 
-- ingesting memories through one API
-- routing data to the most useful substrate
-- combining lexical, semantic, graph, and recency signals during recall
-- promoting durable facts, episodes, and procedures from high-pressure conversations
-- exposing health, workflow, and module metrics endpoints
+## What you get (and what you do not)
 
-## Architecture
+| You get | You do not get (today) |
+|--------|-------------------------|
+| HTTP Memory API (`/v1/memories/*`, metrics, workflows view) | A hosted SaaS UI or multitenant billing |
+| Hybrid retrieval orchestration across Redis / Weaviate / Neo4j | MCP or FastAPI facades bundled in-repo (planned in docs only) |
+| Feedback-driven salience and adaptive compaction | A fully scripted production CD path tested on every fork |
+| Docker Compose stacks, GHCR images, K8s reference manifests | Stateful services auto-provisioned in every `kubectl apply` snippet |
+| Grafana / Prometheus configs and alerting examples | Opinionated SOC2-style compliance toolkit |
 
-Chronogram is a two-service runtime: the `memory-api` handles front-door ingest and recall requests, and the `worker` handles asynchronous maintenance and workflow execution.
+See [release maturity](#release-maturity) for where this realistically fits in your rollout.
 
-At a high level:
+---
 
-- the agent harness only talks to Chronogram through the Memory API
-- the control plane decides how memory is ingested, retrieved, governed, and compacted
-- the data plane persists working, semantic, and graph memory in the right substrate
-- Temporal and the worker handle reindexing, maintenance, and background lifecycle jobs
-- Prometheus, Grafana, Docker Compose, and Kubernetes support operations around the core runtime
+## Quick start
 
-![Reference architecture: Chronogram interface, API, control plane, data plane, execution plane, operations](https://raw.githubusercontent.com/EddiksonPena/Chronogram/main/docs/assets/architecture-reference.png)
+Requirements: **Node.js 22+**, **pnpm**, **Docker Desktop** (or Compose-compatible engine).
 
-Editable vector source (checked into this repo): [`docs/assets/architecture-reference.svg`](https://github.com/EddiksonPena/Chronogram/blob/main/docs/assets/architecture-reference.svg)
+### Option A — One-shot bootstrap (recommended)
 
-The diagram stacks **interface → API → control → data execution** planes: solid edges are typical synchronous request paths during ingest/recall; dotted edges emphasize lifecycle maintenance, telemetry, and orchestration hops. Operational packaging (Compose/K8s) sits alongside Grafana/Prometheus. Chronogram aims for **hybrid retrieval**, **adaptive memory**, **background cognition**, and **governance** atop that substrate—see [docs/architecture/system-overview.md](docs/architecture/system-overview.md) for flows, limits, and heuristics wired into this codebase.
-
-## Current Scope
-
-The current repo is a working `TypeScript` implementation with:
-
-- real ingest into `Redis`, `Weaviate`, and `Neo4j`
-- hybrid recall using lexical, semantic, graph, and working-memory signals
-- feedback-driven salience updates
-- adaptive conversation compaction into episodic, semantic, and procedural memory
-- Temporal-backed worker execution with local fallback behavior
-- health, workflow, and Prometheus metrics endpoints
-- Docker, CI, container images, and Kubernetes reference manifests
-- staged deployment workflow and Prometheus Operator reference alerting
-
-`FastAPI` and `FastMCP` appear in documentation as future facade options, not as the runtime shipped by this repository today.
-
-## Monorepo Layout
-
-- `apps/memory-api`: front-door HTTP API
-- `apps/worker`: workflow and background execution service
-- `packages/core`: routing, retrieval, lifecycle, workflows, and adapters
-- `packages/config`: environment parsing and path resolution
-- `packages/schemas`: shared request and response contracts
-- `infra/docker`: local observability and infrastructure config
-- `deploy/k8s`: reference app-layer Kubernetes manifests
-- `docs/`: architecture, setup, deployment, and roadmap docs
-
-## Quick Start
-
-If you want the fastest path, use the bootstrap command:
+Requires only Node (no prior `pnpm install`):
 
 ```bash
 node scripts/bootstrap.mjs init
 ```
 
-### Prerequisites
+This typically creates `.env` when missing, installs dependencies, lifts infrastructure, optionally starts app containers, verifies health endpoints, and can emit a harness bundle under `generated/harness/`.
 
-- `Node.js` 22+
-- `pnpm`
-- `Docker` with `docker compose`
-
-### Install
+### Option B — Manual path
 
 ```bash
 pnpm install
-```
-
-### Configure
-
-```bash
 cp .env.example .env
-```
-
-The default local ports are:
-
-- memory API: `4000`
-- worker: `4010`
-- Redis: `6380`
-- Weaviate: `8080`
-- Neo4j HTTP: `7474`
-- Neo4j Bolt: `7687`
-- Temporal: `7233`
-- Grafana: `3001`
-- Prometheus: `9090`
-- Alertmanager: `9093`
-
-Local source runs keep the default file-backed memory state in `./data`. Containerized app deployments now default to Redis-backed shared state through `MEMORY_STATE_BACKEND=redis`.
-
-### Start Infrastructure
-
-```bash
+# Set CHRONOGRAM_API_KEY before starting APIs (see Authenticate your requests).
 docker compose up -d
-docker compose ps
+
+pnpm --filter @chronogram/memory-api dev      # Terminal 1
+pnpm --filter @chronogram/worker dev           # Terminal 2
 ```
 
-Note: Docker Redis is intentionally mapped to `localhost:6380` to avoid collisions with host Redis instances on `6379`.
-
-### Start Services
-
-Run these in separate terminals:
-
-```bash
-pnpm --filter @chronogram/memory-api dev
-pnpm --filter @chronogram/worker dev
-```
-
-### Verify Health
+### Smoke health checks
 
 ```bash
 curl http://127.0.0.1:4000/health
 curl http://127.0.0.1:4010/health
 ```
 
-## Onboarding And Bootstrap
-
-Chronogram now ships with two onboarding paths:
-
-- a zero-install bootstrap CLI for first-time setup
-- a local onboarding UI for guided setup and harness connection
-
-### Zero-install bootstrap CLI
-
-This works before `pnpm install` because it only requires `node`.
-
-```bash
-node scripts/bootstrap.mjs init
-node scripts/bootstrap.mjs doctor
-node scripts/bootstrap.mjs connect
-node scripts/bootstrap.mjs down
-```
-
-What `init` does:
-
-- creates `.env` from `.env.example` when needed
-- generates `CHRONOGRAM_API_KEY` if it is blank
-- runs `pnpm install --frozen-lockfile`
-- starts infrastructure with `docker compose up -d`
-- starts the app profile with `docker compose --profile app up -d --build`
-- returns a health report at the end
-
-### Guided onboarding UI
-
-After dependencies are installed, launch the local onboarding UI:
+Prefer a guided UX? Install deps, then:
 
 ```bash
 pnpm chronogram:ui
 ```
 
-Then open:
+Open [`http://127.0.0.1:4020`](http://127.0.0.1:4020).
+
+---
+
+## Authenticate your requests
+
+Default `.env.example` pins `CHRONOGRAM_AUTH_MODE=api-key`. Until `CHRONOGRAM_API_KEY` is **non-empty**, every `/v1/*` and `/workflows/*` request is rejected (**health** routes stay open).
+
+Recommended paths:
+
+1. **Bootstrap** — `node scripts/bootstrap.mjs init` generates a random key when `.env` is blank.
+2. **Manual secret** — set `CHRONOGRAM_API_KEY=your-strong-secret`.
+3. **Local-only experiments** — set `CHRONOGRAM_AUTH_MODE=none` (**never expose this publicly**).
+
+Callers authenticate with **`x-api-key: <CHRONOGRAM_API_KEY>`** (or `Authorization: Bearer <same value>`).
+
+JWT / hybrid modes (`CHRONOGRAM_AUTH_MODE=jwt|hybrid`) require issuer/JWKS configuration—follow [`SECURITY.md`](SECURITY.md) patterns.
+
+Examples below assume you exported your key:
 
 ```bash
-open http://127.0.0.1:4020
+export CHRONOGRAM_API_KEY="$(grep '^CHRONOGRAM_API_KEY=' .env | cut -d= -f2-)"
+API_AUTH=(-H "content-type: application/json" -H "x-api-key: ${CHRONOGRAM_API_KEY}")
 ```
 
-The UI provides:
+If you flipped auth mode to `none`, drop the `-H x-api-key` lines.
 
-- prerequisite checks for `node`, `pnpm`, and `docker`
-- live service health for Chronogram and key dependencies
-- a one-click full bootstrap action
-- a stop-stack action
-- generated harness connection snippets
+---
 
-### Harness bundle output
+## Using the Memory API
 
-Both onboarding paths can generate a reusable harness bundle in:
-
-- [`generated/harness/chronogram-harness-config.json`](generated/harness/chronogram-harness-config.json)
-- [`generated/harness/chronogram-harness-config.md`](generated/harness/chronogram-harness-config.md)
-
-This bundle is HTTP-first and includes:
-
-- environment exports
-- a JSON manifest for the memory API endpoints
-- a Node fetch example
-- a curl smoke test
-
-Chronogram does not yet ship a native MCP or FastMCP facade in this repository, so harness integration is currently done over HTTP.
-
-## Deployment Automation
-
-Container image publishing happens from Git tags through:
-
-- `.github/workflows/release-images.yml`
-
-Reference Kubernetes deployment paths now include:
-
-- `.github/workflows/deploy-reference.yml` for targeted environment deploys
-- `.github/workflows/promote-release.yml` for staging-to-production promotion of a released image tag
-
-The promotion flow deploys the requested image tag to `staging` first and only proceeds to `production` after staging succeeds. Use GitHub Environment protection rules on `production` if you want an approval gate before the second step runs.
-
-## Production Validation
-
-The repo now includes a production-readiness CLI in [`scripts/production-readiness.mjs`](scripts/production-readiness.mjs).
-
-Useful commands:
-
-```bash
-pnpm chronogram:preflight -- --env-file .env.production.example
-pnpm chronogram:smoke
-pnpm chronogram:load -- --requests 60 --concurrency 6
-```
-
-The full rollout checklist lives in [`docs/deployment/production-readiness.md`](docs/deployment/production-readiness.md).
-
-## Monitoring And Alerting
-
-Chronogram exposes Prometheus metrics from both the API and worker services and now includes Prometheus Operator reference manifests for:
-
-- `ServiceMonitor`
-- `PodMonitor`
-- `PrometheusRule`
-- `AlertmanagerConfig`
-
-The in-cluster alert rules track target availability, workflow failures, workflow backlog, and ingest/recall latency. Adapt the example receiver endpoints before applying the alert manager config in a real environment.
-
-## How To Use Chronogram
+Base URL defaults to **`http://127.0.0.1:4000`** (`memory-api`). Worker HTTP defaults to **`http://127.0.0.1:4010`**.
 
 ### 1. Ingest memory
 
 ```bash
-curl -X POST http://127.0.0.1:4000/v1/memories/ingest \
+curl -X POST "${CHRONOGRAM_BASE_URL:-http://127.0.0.1:4000}/v1/memories/ingest" \
   -H 'content-type: application/json' \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}" \
   -d '{
     "scope": "workspace",
     "source": "readme-example",
@@ -280,19 +155,14 @@ curl -X POST http://127.0.0.1:4000/v1/memories/ingest \
   }'
 ```
 
-What happens:
+Artifacts land in Redis, Weaviate, and Neo4j; background workflows enqueue as configured.
 
-- Chronogram creates memory artifacts and chunks
-- working-memory recency is updated in `Redis`
-- semantic chunks are mirrored into `Weaviate`
-- entities and relationships are written into `Neo4j`
-- maintenance workflows can be scheduled automatically
-
-### 2. Recall relevant context
+### 2. Recall context
 
 ```bash
-curl -X POST http://127.0.0.1:4000/v1/memories/recall \
+curl -X POST "${CHRONOGRAM_BASE_URL:-http://127.0.0.1:4000}/v1/memories/recall" \
   -H 'content-type: application/json' \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}" \
   -d '{
     "query": "What does the Retrieval Orchestrator use for working memory and graph reasoning?",
     "scope": "workspace",
@@ -300,61 +170,53 @@ curl -X POST http://127.0.0.1:4000/v1/memories/recall \
   }'
 ```
 
-Expected behavior:
-
-- Chronogram fuses results from multiple stores
-- results are reranked into one response payload
-- diagnostics show which memory systems contributed
-
-### 3. Reinforce or demote memory with feedback
+### 3. Apply feedback / salience
 
 ```bash
-curl -X POST http://127.0.0.1:4000/v1/memories/feedback \
+curl -X POST "${CHRONOGRAM_BASE_URL:-http://127.0.0.1:4000}/v1/memories/feedback" \
   -H 'content-type: application/json' \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}" \
   -d '{
-    "artifactId": "<artifact-id>",
+    "artifactId": "<paste-artifact-id>",
     "useful": true
   }'
 ```
 
-### 4. Compact a conversation window into durable memory
+### 4. Compact & promote conversation memory
 
 ```bash
-curl -X POST http://127.0.0.1:4000/v1/memories/compact \
+curl -X POST "${CHRONOGRAM_BASE_URL:-http://127.0.0.1:4000}/v1/memories/compact" \
   -H 'content-type: application/json' \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}" \
   -d '{
     "scope": "workspace",
     "occupancyRatio": 0.74,
     "sessionId": "demo-session",
     "messages": [
-      { "role": "user", "content": "Redis runs on port 6380 locally and should stay that way." },
-      { "role": "assistant", "content": "First inspect docker compose health, then restart the worker, then verify recall." },
-      { "role": "user", "content": "There is still a blocker: follow up on auth rollout after deployment." }
+      { "role": "user", "content": "Redis runs on port 6380 locally." },
+      { "role": "assistant", "content": "Check docker compose, restart worker, recall again." },
+      { "role": "user", "content": "Follow up on auth rollout." }
     ]
   }'
 ```
 
-Expected behavior:
-
-- Chronogram detects context pressure
-- it derives episodic, semantic, and procedural candidates
-- high-confidence candidates are promoted into durable memory modules
-- the response explains whether compaction triggered and what was promoted
-
-### 5. Run maintenance workflows
+### 5. Trigger maintenance workflows (worker API)
 
 ```bash
-curl -X POST http://127.0.0.1:4010/workflows/reindex
+curl -X POST "${CHRONOGRAM_WORKER_URL:-http://127.0.0.1:4010}/workflows/reindex" \
+  -H 'content-type: application/json' \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}" \
+  -d '{}'
 ```
 
-You can also inspect workflow activity:
+Inspect runs:
 
 ```bash
-curl http://127.0.0.1:4000/v1/workflows/runs
-curl http://127.0.0.1:4010/workflows/definitions
+curl "${CHRONOGRAM_BASE_URL:-http://127.0.0.1:4000}/v1/workflows/runs"
+curl "${CHRONOGRAM_WORKER_URL:-http://127.0.0.1:4010}/workflows/definitions"
 ```
 
-### 6. Inspect observability
+### 6. Metrics & dashboards
 
 ```bash
 curl http://127.0.0.1:4000/v1/metrics/modules
@@ -362,174 +224,116 @@ curl http://127.0.0.1:4000/metrics
 curl http://127.0.0.1:4010/metrics
 ```
 
-Optional local dashboards:
+Default local dashboards (when infra profile is enabled): Grafana [`127.0.0.1:3001`](http://127.0.0.1:3001), Prometheus [`127.0.0.1:9090`](http://127.0.0.1:9090), Alertmanager [`127.0.0.1:9093`](http://127.0.0.1:9093).
 
-```bash
-open http://127.0.0.1:3001
-open http://127.0.0.1:9090
-open http://127.0.0.1:9093
-```
+### Minimal route map
 
-## API Surface
+Memory API highlights:
 
-### Memory API
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | Liveness probe |
+| `GET` | `/v1/memories` | Inspect stored summaries |
+| `POST` | `/v1/memories/ingest` | Create memory artifacts |
+| `POST` | `/v1/memories/recall` | Hybrid retrieval |
+| `POST` | `/v1/memories/feedback` | Reward / attenuate artifacts |
+| `POST` | `/v1/memories/compact` | Adaptive compaction workflow |
+| `GET` | `/v1/workflows/runs` | Workflow visibility |
+| `GET` | `/v1/metrics/modules` | JSON module telemetry |
+| `GET` | `/metrics` | Prometheus scrape surface |
 
-- `GET /health`
-- `GET /v1/memories`
-- `POST /v1/memories/ingest`
-- `POST /v1/memories/recall`
-- `POST /v1/memories/feedback`
-- `POST /v1/memories/compact`
-- `GET /v1/workflows/runs`
-- `GET /v1/metrics/modules`
-- `GET /metrics`
+Worker highlights:
 
-### Worker API
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | Worker probe |
+| `POST` | `/workflows/reindex` | Kick async reindex |
+| `POST` | `/workflows/execute` | Generic workflow enqueue |
+| `GET` | `/workflows/definitions` | Enumerate workflow definitions |
+| `GET` | `/workflows/runs` | Inspect run history |
 
-- `GET /health`
-- `POST /workflows/reindex`
-- `GET /workflows/definitions`
-- `GET /workflows/runs`
-- `GET /metrics/modules`
-- `GET /metrics`
-- `POST /workflows/execute`
+---
 
-## Optional Graphiti Mode
+## Architecture
 
-To use the Python Graphiti bridge:
+Services:
 
-- set `TEMPORAL_GRAPH_BACKEND=graphiti-python`
-- install `graphiti-core` into the runtime referenced by `GRAPHITI_PYTHON_BIN`
-- ensure that runtime has the LLM and embedding credentials it needs
-- keep `GRAPHITI_GROUP_ID` set so episodic memory stays namespaced correctly
+- **`memory-api`** — synchronous ingestion, retrieval, compaction, telemetry.
+- **`worker`** — durable maintenance via Temporal (reindexing, housekeeping, batch jobs).
 
-Validated local defaults:
+Data plane backends (managed by this repo via Compose manifests or externally in production):
 
-- `EXTRACTION_MODEL=qwen2.5:14b`
-- `EMBEDDING_MODEL=nomic-embed-text`
-- `OLLAMA_HOST=http://127.0.0.1:11434`
+| Store | Responsibility |
+|-------|----------------|
+| Redis | Working memory plus shared ephemeral state (`MEMORY_STATE_BACKEND=redis` recommended in containers). |
+| Weaviate | Embeddings / semantic retrieval. |
+| Neo4j | Temporal graph reasoning for entities & relations. |
 
-Low-resource fallback:
+Operational packaging includes Prometheus scraping, Grafana dashboards, Docker Compose presets, Kubernetes references, Alertmanager stubs, plus GitHub Actions for CI, image pushes, staged deploy pipelines.
 
-- `EXTRACTION_MODEL=qwen2.5:7b`
-- `EMBEDDING_MODEL=nomic-embed-text`
+![Reference architecture: Chronogram interface, API, control plane, data plane, execution plane, operations](https://raw.githubusercontent.com/EddiksonPena/Chronogram/main/docs/assets/architecture-reference.png)
 
-## Readiness For Distribution
+Editable SVG source — [`docs/assets/architecture-reference.svg`](https://github.com/EddiksonPena/Chronogram/blob/main/docs/assets/architecture-reference.svg).
 
-This repo is not at the same readiness level for every kind of distribution. The checklist below is the blunt version.
+Deeper dives: [**System overview**](docs/architecture/system-overview.md) explains flows, compaction heuristics, and subsystem boundaries beyond this diagram.
 
-### 1. Open Source Release Readiness
+---
 
-Status: `Yes, with caveats`
+## Ports reference
 
-What is already in place:
+| Service | Port |
+|---------|------|
+| Memory API | `4000` |
+| Worker | `4010` |
+| Onboarding UI (`pnpm chronogram:ui`) | `4020` |
+| Redis | `6380` (purposefully off `6379` to dodge host clashes) |
+| Weaviate | `8080` |
+| Neo4j Browser / Bolt | `7474` / `7687` |
+| Temporal Frontend | `7233` |
+| Grafana | `3001` |
+| Prometheus | `9090` |
+| Alertmanager | `9093` |
 
-- working code paths for ingest, recall, feedback, compaction, and workflows
-- `pnpm typecheck`, `pnpm build`, and `pnpm test` pass
-- container files for `memory-api` and `worker`
-- CI validation on pull requests and `main`
-- tagged image publishing workflow to `GHCR`
-- environment templates and deployment reference manifests
-- community docs and repository hygiene files
+Local file-backed snapshots default to `./data` when `.env` uses `MEMORY_STATE_BACKEND=file`; container workloads should prefer Redis-backed coordination.
 
-What to keep clear in the README and release notes:
+---
 
-- this is a local-first and reference-distribution project today
-- the Kubernetes manifests are app-layer reference manifests, not a full production stack
-- distributed production operation still requires additional infrastructure and hardening
+## Onboarding tooling
 
-### 2. Staging Readiness
+| Command | When to run |
+|---------|--------------|
+| `node scripts/bootstrap.mjs doctor` | Pre-flight prerequisites before sharing with teammates. |
+| `node scripts/bootstrap.mjs init` | First-time workstation setup plus optional stack orchestration. |
+| `node scripts/bootstrap.mjs connect` | Echo harness snippets for external agent stacks. |
+| `node scripts/bootstrap.mjs down` | Tear down compose profiles started by onboarding. |
 
-Status: `Partially`
+Harness payloads land in [`generated/harness/`](generated/harness/) (`chronogram-harness-config.{json,md}`) with `.env`-style exports, fetch samples, curl smoke snippets.
 
-Good enough for a controlled staging environment if you provide:
+---
 
-- managed or separately deployed `Redis`, `Weaviate`, `Neo4j`, `Temporal`, and `PostgreSQL`
-- real secrets instead of placeholder values
-- ingress and TLS
-- smoke tests that hit the full stack after deploy
+## Build, package, deploy
 
-Main staging gaps still present in the repo:
-
-- the Kubernetes folder does not deploy the stateful dependencies
-- no end-to-end staging deploy pipeline is present yet
-- harness integration is HTTP-first today and does not yet include a native MCP facade
-
-### 3. Production Readiness
-
-Status: `Not yet`
-
-Main blockers:
-
-- no complete production deployment package for the full dependency graph
-- auth is still API-key level, not a stronger identity and authorization model
-- secret management, backups, disaster recovery, and network isolation are not fully implemented in-repo
-- no documented rollback-tested production CD path
-
-Production should only be claimed once these are done:
-
-- finalize a full deployment shape for all stateful services
-- put real auth, TLS, secret management, and backups in place
-- add post-deploy smoke checks and rollback procedures
-
-## Deployment Assets
-
-Chronogram already includes:
-
-- app container files:
-  - [`apps/memory-api/Dockerfile`](apps/memory-api/Dockerfile)
-  - [`apps/worker/Dockerfile`](apps/worker/Dockerfile)
-- CI:
-  - [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
-  - [`.github/workflows/release-images.yml`](.github/workflows/release-images.yml)
-- env templates:
-  - [`.env.example`](.env.example)
-  - [`.env.production.example`](.env.production.example)
-- Kubernetes reference manifests:
-  - [`deploy/k8s/configmap.yaml`](deploy/k8s/configmap.yaml)
-  - [`deploy/k8s/secret.example.yaml`](deploy/k8s/secret.example.yaml)
-  - [`deploy/k8s/platform-secrets.example.yaml`](deploy/k8s/platform-secrets.example.yaml)
-  - [`deploy/k8s/external-secret.example.yaml`](deploy/k8s/external-secret.example.yaml)
-  - [`deploy/k8s/networkpolicy.yaml`](deploy/k8s/networkpolicy.yaml)
-  - [`deploy/k8s/poddisruptionbudgets.yaml`](deploy/k8s/poddisruptionbudgets.yaml)
-  - [`deploy/k8s/hpa.yaml`](deploy/k8s/hpa.yaml)
-  - [`deploy/k8s/servicemonitor.example.yaml`](deploy/k8s/servicemonitor.example.yaml)
-  - [`deploy/k8s/podmonitor.example.yaml`](deploy/k8s/podmonitor.example.yaml)
-  - [`deploy/k8s/ingress.example.yaml`](deploy/k8s/ingress.example.yaml)
-  - [`deploy/k8s/memory-api-deployment.yaml`](deploy/k8s/memory-api-deployment.yaml)
-  - [`deploy/k8s/worker-deployment.yaml`](deploy/k8s/worker-deployment.yaml)
-  - [`deploy/k8s/platform`](deploy/k8s/platform)
-- deploy workflow:
-  - [`.github/workflows/deploy-reference.yml`](.github/workflows/deploy-reference.yml)
-- restore runbook:
-  - [`docs/deployment/backup-and-restore.md`](docs/deployment/backup-and-restore.md)
-
-## Launch Paths
-
-### Local source launch
-
-```bash
-pnpm install
-docker compose up -d
-pnpm --filter @chronogram/memory-api dev
-pnpm --filter @chronogram/worker dev
-```
-
-### Build container images locally
+### Containers
 
 ```bash
 docker build -f apps/memory-api/Dockerfile -t chronogram/memory-api:local .
 docker build -f apps/worker/Dockerfile -t chronogram/worker:local .
 ```
 
-### Run with the compose app profile
+### Compose “app profile”
 
 ```bash
-cp .env.production.example .env
+cp .env.production.example .env   # Customize secrets before trusting this path
 docker compose --profile app up -d --build
 ```
 
-### Apply the Kubernetes app-layer reference
+CI publishes immutable tags via [`.github/workflows/release-images.yml`](.github/workflows/release-images.yml).
+
+### Kubernetes
+
+Reference manifests live under [`deploy/k8s/`](deploy/k8s/) (ConfigMaps, workloads, PDBs, HPA hooks, Ingress examples).
+
+**Bare reference** — applies only Chronogram workloads; operators must attach managed Redis / Weaviate / Neo4j / Temporal / Postgres externally.
 
 ```bash
 kubectl apply -f deploy/k8s/namespace.yaml
@@ -539,58 +343,103 @@ kubectl apply -f deploy/k8s/memory-api-deployment.yaml
 kubectl apply -f deploy/k8s/worker-deployment.yaml
 ```
 
-Important: this Kubernetes reference does not deploy `Redis`, `Weaviate`, `Neo4j`, `Temporal`, or `PostgreSQL`. Those must be provided separately.
+**Stacked demo** (`deploy/k8s/platform`) folds in Compose-adjacent data dependencies for evaluation clusters—still **reference-grade**, not a compliance-ready production bundle.
 
-### Apply the full self-hosted Kubernetes reference
+Staging / production rollout guidance: [**Production readiness playbook**](docs/deployment/production-readiness.md), [**Backup & restore**](docs/deployment/backup-and-restore.md), **[Distributed deployment considerations](docs/deployment/distributed-open-source-deployment.md)**.
+
+GitHub workflows for reference environments: **[`deploy-reference.yml`](.github/workflows/deploy-reference.yml)**, **[`promote-release.yml`](.github/workflows/promote-release.yml)** — enable environment protection gates on GitHub Environment names before trusting automated promotion logic.
+
+---
+
+## Operational validation
 
 ```bash
-kubectl apply -k deploy/k8s/platform
-kubectl apply -f deploy/k8s/networkpolicy.yaml
-kubectl apply -f deploy/k8s/poddisruptionbudgets.yaml
-kubectl apply -f deploy/k8s/hpa.yaml
-kubectl apply -f deploy/k8s/configmap.yaml
-kubectl apply -f deploy/k8s/secret.example.yaml
-kubectl apply -f deploy/k8s/memory-api-deployment.yaml
-kubectl apply -f deploy/k8s/worker-deployment.yaml
+pnpm chronogram:preflight -- --env-file .env.production.example
+pnpm chronogram:smoke
+pnpm chronogram:load -- --requests 60 --concurrency 6
 ```
 
-The full reference stack includes Redis, Weaviate, Neo4j, Temporal, and PostgreSQL, plus network policies and disruption budgets, but it is still a reference deployment that should be hardened for storage classes, backups, and environment-specific resource sizing before production use.
+These wrap [`scripts/production-readiness.mjs`](scripts/production-readiness.mjs)—pair them with staged smoke tests hitting every dependency tier.
 
-If you use the Prometheus Operator, the repo also includes reference `ServiceMonitor` and `PodMonitor` manifests for authenticated app metrics scraping.
+---
 
-## Security And Hardening
+## Monitoring
 
-Already present:
+- Memory API publishes JSON summaries at **`GET /v1/metrics/modules`** and Prometheus text at **`GET /metrics`**.
+- Worker publishes the same split at **`GET /metrics/modules`** and **`GET /metrics`**.
+- Example **`ServiceMonitor`**, **`PrometheusRule`**, and **`AlertmanagerConfig`** resources live beside the Kubernetes manifests; tune receivers before applying to live clusters.
 
-- request size limits through `MAX_REQUEST_BYTES`
-- graceful shutdown hooks for `SIGINT` and `SIGTERM`
-- optional auth modes for non-health routes:
-  `api-key`, `jwt`, `hybrid`, and `none`
-- JWT/OIDC bearer validation with issuer, audience, JWKS, and required-scope support
-- Redis-backed shared state for containerized deployments
-- file-backed local state for source-run development
+---
 
-Still required before internet-facing production use:
+## Security & hardening
 
-- secret management instead of inline secrets or example manifests
-- TLS ingress
-- backup and restore procedures for every stateful dependency
+What already exists:
+
+- Configurable **`CHRONOGRAM_AUTH_MODE`**: `api-key`, `jwt`, `hybrid`, `none`.
+- Payload guardrails (`MAX_REQUEST_BYTES`).
+- Cooperative shutdown honoring `SIGTERM`/`SIGINT`.
+- Optional Redis-backed state for clustered pods.
+
+Mandatory before trusting this on hostile networks:
+
+- TLS termination at ingress
+- Dedicated secret vaulting (avoid committing real secrets—even “example” overlays should rotate)
+- Network policies narrowed to Temporal + datastore subnets
+- Backups + restores validated per datastore (see **[backup playbook](docs/deployment/backup-and-restore.md)**)
+
+Responsible disclosure guidelines live in **`SECURITY.md`**.
+
+---
+
+## Release maturity
+
+| Stage | Suitability |
+|-------|--------------|
+| **Local / OSS evaluation** | **Ready** — Compose + docs + onboarding UI keep spin-up repeatable. CI enforces lint/build/typecheck/tests. GHCR publishes tags. |
+| **Staging clusters** | **Partial** — You must bolt on managed infra, ingress, rotated secrets, and smoke automation. Harness integration **remains HTTP-first** (bring your own MCP if needed). |
+| **Highly regulated enterprise production** | **Not endorsed yet** — You still need hardened dependency bundles, audited authorization semantics, repeatable CD plus rollback rehearsal, and field-tested ops runbooks. Finish those externally before staking production SLAs on this distribution. |
+
+Use this framing in internal reviews and stakeholder updates so expectations stay grounded.
+
+---
+
+## Repository layout
+
+| Path | Role |
+|------|------|
+| `apps/memory-api` | Production HTTP façade |
+| `apps/worker` | Temporal-connected worker daemon |
+| `packages/core` | Routing, ingestion, retrieval, lifecycle, adapters |
+| `packages/config`, `packages/schemas`, `packages/auth`, `packages/onboarding` | Contracts + utilities |
+| `infra/docker`, `deploy/k8s` | Runtime wiring & cluster templates |
+| `docs/` | Narrative docs, roadmap, alignment notes |
+| `scripts/` | Bootstrap + operational CLIs |
+
+---
 
 ## Documentation
 
-- [Setup and Usage](docs/setup/setup-and-usage.md)
-- [Backup and Restore](docs/deployment/backup-and-restore.md)
-- [Distributed Deployment Guide](docs/deployment/distributed-open-source-deployment.md)
-- [Kubernetes Reference](deploy/k8s/README.md)
-- [Source Alignment Notes](docs/reference/source-alignment.md)
-- [Execution Roadmap](docs/roadmap/mvp-roadmap.md)
-- [System Overview](docs/architecture/system-overview.md)
-- [ADR 001: Architecture Boundaries](docs/adr/001-control-plane-boundaries.md)
+- [**Setup & day-two usage**](docs/setup/setup-and-usage.md)
+- [**System overview & heuristics**](docs/architecture/system-overview.md)
+- [**Production readiness checklist**](docs/deployment/production-readiness.md)
+- [**Distributed deployment nuances**](docs/deployment/distributed-open-source-deployment.md)
+- [**Kubernetes reference README**](deploy/k8s/README.md)
+- [**Source alignment stance**](docs/reference/source-alignment.md)
+- [**MVP roadmap**](docs/roadmap/mvp-roadmap.md)
+- [**ADR 001 · Control-plane boundaries**](docs/adr/001-control-plane-boundaries.md)
 
-## Summary
+Optional advanced topic — **Python Graphiti bridge**:
 
-If you want the shortest honest description:
+- Set `TEMPORAL_GRAPH_BACKEND=graphiti-python`.
+- Provision `GRAPHITI_PYTHON_BIN`, embeddings + LLM env vars (`OLLAMA_HOST`, `EXTRACTION_MODEL`, `EMBEDDING_MODEL`, etc.).
+- Pin `GRAPHITI_GROUP_ID` for namespace isolation.
 
-- use Chronogram today for local development, demos, evaluation, and reference open-source distribution
-- use it in staging only if you supply the missing infrastructure and accept the current shared-state caveat
-- do not claim full production readiness yet
+---
+
+## Contributing
+
+Please read **[`CONTRIBUTING.md`](CONTRIBUTING.md)** and **`CODE_OF_CONDUCT.md`** before submitting issues or patches.
+
+---
+
+MIT License · see **`LICENSE`** for full text.
