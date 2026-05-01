@@ -64,9 +64,9 @@ At a high level:
 - Temporal and the worker handle reindexing, maintenance, and background lifecycle jobs
 - Prometheus, Grafana, Docker Compose, and Kubernetes support operations around the core runtime
 
-<p align="center">
-<img src="docs/assets/architecture-reference.svg" alt="Reference architecture diagram: Chronogram layered across interface, API, control plane, data plane, execution plane, and operations." width="1000"/>
-</p>
+![Reference architecture: Chronogram interface, API, control plane, data plane, execution plane, operations](docs/assets/architecture-reference.png)
+
+Editable source: [`docs/assets/architecture-reference.svg`](docs/assets/architecture-reference.svg)
 
 The diagram stacks **interface → API → control → data execution** planes: solid edges are typical synchronous request paths during ingest/recall; dotted edges emphasize lifecycle maintenance, telemetry, and orchestration hops. Operational packaging (Compose/K8s) sits alongside Grafana/Prometheus. Chronogram aims for **hybrid retrieval**, **adaptive memory**, **background cognition**, and **governance** atop that substrate—see [docs/architecture/system-overview.md](docs/architecture/system-overview.md) for flows, limits, and heuristics wired into this codebase.
 
