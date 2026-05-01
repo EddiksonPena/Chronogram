@@ -66,79 +66,82 @@ At a high level:
 
 ```mermaid
 flowchart TB
-    A["Agent Harness"]
-    B["Memory API Service<br/>HTTP ingest, recall, feedback, metrics"]
-
-    A --> B
-
-    subgraph C["Chronogram Control Plane"]
-        direction LR
-        C1["Ingestion Pipeline<br/>normalize, chunk, route"]
-        C2["Retrieval Orchestrator<br/>hybrid search, rerank, assemble context"]
-        C3["Lifecycle + Feedback<br/>salience, compaction, promotion"]
-        C4["Governance + Auth<br/>API key or JWT, provenance, scopes"]
+    subgraph INTERFACE["Interface layer — who interacts"]
+        AH["Agent harness / clients<br/>LLMs · applications · tools · MCP clients · custom agents"]
     end
 
-    subgraph D["Memory Data Plane"]
-        direction LR
-        D1["Redis<br/>working memory + shared state"]
-        D2["Weaviate<br/>semantic retrieval"]
-        D3["Neo4j<br/>graph memory"]
+    subgraph APILAYER["API layer — contract boundary"]
+        API["Chronogram API<br/>ingest · recall · feedback · metrics · auth · rate limits<br/><small>JWT / API keys</small>"]
     end
 
-    subgraph E["Background Execution"]
-        direction LR
-        E1["Worker Service<br/>workflow execution, reindex, maintenance"]
-        E2["Temporal Service<br/>task queue + orchestration"]
+    subgraph CONTROL["Control plane — intelligence"]
+        IPT["Ingestion pipeline<br/>normalize · chunk · embed · entities & relations · route"]
+        RTR["Retrieval orchestrator<br/>hybrid retrieval · rerank · context assembly · query planning"]
+        MCS["Memory lifecycle engine<br/>salience · promotion / demotion · summarization · compression · decay policies"]
+        GOV["Governance layer<br/>auth & authorization · provenance · access control · audit log · isolation"]
     end
 
-    subgraph F["Operations"]
+    subgraph DATAPLANE["Data plane — memory substrate"]
         direction LR
-        F1["Prometheus + Grafana<br/>metrics, dashboards, alerts"]
-        F2["Docker Compose / Kubernetes<br/>local stack + deployment references"]
+        KV["Redis<br/>working memory · sessions · recent context"]
+        VD["Vector store · Weaviate / Chroma<br/>embeddings · similarity recall"]
+        GPH["Neo4j<br/>entities & relations · graph traversal"]
     end
 
-    B --> C
-    C --> D
-    C --> E1
-    E1 <--> E2
-    B --> F1
-    E1 --> F1
-    D --> F2
-    E2 --> F2
+    subgraph EXECPLANE["Execution plane — background cognition"]
+        direction LR
+        WRK["Worker engine<br/>reindex · summarize · embed updates · graph enrichment · cleanup · batch"]
+        TMP["Temporal workflows<br/>durable workflows · scheduling · retries · events · human-in-the-loop"]
+    end
 
-    classDef top fill:#0a1220,stroke:#4f8cff,color:#f7fbff,stroke-width:2px;
-    classDef control fill:#071910,stroke:#35db72,color:#82ffad,stroke-width:2px;
-    classDef controlItem fill:#0d2418,stroke:#2da85c,color:#f1fff5,stroke-width:1.5px;
-    classDef data fill:#160d27,stroke:#9f67ff,color:#dcbfff,stroke-width:2px;
-    classDef dataItem fill:#1f1336,stroke:#8d57f2,color:#f7efff,stroke-width:1.5px;
-    classDef workflow fill:#261607,stroke:#ffad3b,color:#ffc86f,stroke-width:2px;
-    classDef workflowItem fill:#341f0d,stroke:#d98a24,color:#fff4e3,stroke-width:1.5px;
-    classDef ops fill:#091424,stroke:#3aa0ff,color:#bfe1ff,stroke-width:2px;
-    classDef opsItem fill:#10203a,stroke:#4e8fe4,color:#eef6ff,stroke-width:1.5px;
+    subgraph OPSLAB["Operations — observability & packaging"]
+        direction LR
+        MON["Prometheus + Grafana<br/>metrics · dashboards · alerts"]
+        RUN["Docker Compose · Kubernetes references<br/>local stack · deployments"]
+    end
 
-    class A,B top;
-    class C control;
-    class C1,C2,C3,C4 controlItem;
-    class D data;
-    class D1,D2,D3 dataItem;
-    class E workflow;
-    class E1,E2 workflowItem;
-    class F ops;
-    class F1,F2 opsItem;
+    AH --> API
 
-    linkStyle 0 stroke:#74b9ff,stroke-width:2px
-    linkStyle 1 stroke:#49e77a,stroke-width:2px
-    linkStyle 2 stroke:#b57cff,stroke-width:2px
-    linkStyle 3 stroke:#ffb85c,stroke-width:2px
-    linkStyle 4 stroke:#ffb85c,stroke-width:2px
-    linkStyle 5 stroke:#67b5ff,stroke-width:2px
-    linkStyle 6 stroke:#67b5ff,stroke-width:2px
-    linkStyle 7 stroke:#7f9cff,stroke-width:2px
-    linkStyle 8 stroke:#7f9cff,stroke-width:2px
+    API --> IPT & RTR & MCS & GOV
+
+    IPT --> KV & VD & GPH
+    RTR --> KV & VD & GPH
+    MCS -.-> KV & VD & GPH
+
+    KV -.-> WRK & MON
+    VD -.-> WRK & MON
+    GPH -.-> WRK & MON
+
+    MCS & GOV -.-> MON
+
+    WRK <--> TMP
+
+    TMP --> MON
+    KV & VD & GPH --> RUN
+    WRK --> RUN
+    TMP --> RUN
+
+    classDef iface fill:#231435,stroke:#a78bfa,color:#ede9fe,stroke-width:2px;
+
+    classDef api fill:#1e1b4b,stroke:#818cf8,color:#e0e7ff,stroke-width:2px;
+
+    classDef ctl fill:#2b1806,stroke:#fb923c,color:#ffedd5,stroke-width:2px;
+
+    classDef dp fill:#2c1810,stroke:#d97757,color:#fce7dc,stroke-width:2px;
+
+    classDef exe fill:#0c1e3f,stroke:#60a5fa,color:#dbeafe,stroke-width:2px;
+
+    classDef opsstyle fill:#0f172a,stroke:#38bdf8,color:#cffafe,stroke-width:2px;
+
+    class AH iface;
+    class API api;
+    class IPT,RTR,MCS,GOV ctl;
+    class KV,VD,GPH dp;
+    class WRK,TMP exe;
+    class MON,RUN opsstyle;
 ```
 
-This diagram is the reference architecture for the current repository. More detailed behavior, heuristics, and request flows are documented in [docs/architecture/system-overview.md](docs/architecture/system-overview.md).
+The diagram stacks **interface → API → control → data execution** planes: solid edges are typical synchronous request paths during ingest/recall; dotted edges emphasize lifecycle maintenance, telemetry, and orchestration hops. Operational packaging (Compose/K8s) sits alongside Grafana/Prometheus. Chronogram aims for **hybrid retrieval**, **adaptive memory**, **background cognition**, and **governance** atop that substrate—see [docs/architecture/system-overview.md](docs/architecture/system-overview.md) for flows, limits, and heuristics wired into this codebase.
 
 ## Current Scope
 
