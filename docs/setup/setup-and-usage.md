@@ -6,7 +6,7 @@ This guide explains how to set up `Chronogram`, launch the local stack, and exer
 
 ## Prerequisites
 
-- `Node.js` 24+
+- `Node.js` 22+
 - `pnpm`
 - `Docker` with `docker compose`
 
@@ -33,6 +33,9 @@ Copy the sample environment file:
 ```bash
 cp .env.example .env
 ```
+
+Set `CHRONOGRAM_API_KEY` before calling non-health endpoints, or run
+`pnpm chronogram:init` to generate one during bootstrap.
 
 Defaults are designed for local development:
 
@@ -72,11 +75,32 @@ curl http://127.0.0.1:4000/health
 curl http://127.0.0.1:4010/health
 ```
 
+Export your API key for the request examples:
+
+```bash
+export CHRONOGRAM_API_KEY="$(grep '^CHRONOGRAM_API_KEY=' .env | cut -d= -f2-)"
+```
+
+## Fully Containerized App Stack
+
+To run the API and worker in Docker as well:
+
+```bash
+cp .env.production.example .env
+# Set CHRONOGRAM_API_KEY and replace production placeholders first.
+docker compose --profile app up -d --build
+```
+
+The app image build warms `onnx-community/Qwen3-Embedding-0.6B-ONNX` with
+`EMBEDDING_DTYPE=q8` by default. Set `WARM_EMBEDDING_MODEL=false` when you want
+faster rebuilds during local iteration.
+
 ## Ingest
 
 ```bash
 curl -X POST http://127.0.0.1:4000/v1/memories/ingest \
   -H 'content-type: application/json' \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}" \
   -d '{
     "scope": "workspace",
     "source": "setup-guide",
@@ -98,6 +122,7 @@ Expected outcome:
 ```bash
 curl -X POST http://127.0.0.1:4000/v1/memories/recall \
   -H 'content-type: application/json' \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}" \
   -d '{
     "query": "What does the Retrieval Orchestrator use for working memory and graph reasoning?",
     "scope": "workspace",
@@ -116,6 +141,7 @@ Expected outcome:
 ```bash
 curl -X POST http://127.0.0.1:4000/v1/memories/feedback \
   -H 'content-type: application/json' \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}" \
   -d '{
     "artifactId": "<artifact-id>",
     "useful": true
@@ -125,7 +151,8 @@ curl -X POST http://127.0.0.1:4000/v1/memories/feedback \
 ## Reindex
 
 ```bash
-curl -X POST http://127.0.0.1:4010/workflows/reindex
+curl -X POST http://127.0.0.1:4010/workflows/reindex \
+  -H "x-api-key: ${CHRONOGRAM_API_KEY:?set CHRONOGRAM_API_KEY from .env}"
 ```
 
 Expected outcome:

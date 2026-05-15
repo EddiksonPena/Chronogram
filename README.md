@@ -74,7 +74,31 @@ See [release maturity](#release-maturity) for where this realistically fits in y
 
 Requirements: **Node.js 22+**, **pnpm**, **Docker Desktop** (or Compose-compatible engine).
 
-### Option A — One-shot bootstrap (recommended)
+### Option A — Fully containerized app stack (recommended for product smoke)
+
+This path keeps the API, worker, data stores, and Qwen embedding runtime inside
+Docker. It is the closest local version of the shippable application.
+
+```bash
+cp .env.production.example .env
+# Set CHRONOGRAM_API_KEY and replace any production placeholders before sharing the stack.
+docker compose --profile app up -d --build
+```
+
+The first build downloads and caches the default quantized embedding model in
+the app images:
+
+```bash
+EMBEDDING_PROVIDER=transformers
+EMBEDDING_MODEL=onnx-community/Qwen3-Embedding-0.6B-ONNX
+EMBEDDING_DTYPE=q8
+EMBEDDING_DIMENSIONS=1024
+```
+
+Use `WARM_EMBEDDING_MODEL=false docker compose --profile app up -d --build`
+for faster local rebuilds after the model path has already been verified.
+
+### Option B — One-shot bootstrap
 
 Requires only Node (no prior `pnpm install`):
 
@@ -84,7 +108,10 @@ node scripts/bootstrap.mjs init
 
 This typically creates `.env` when missing, installs dependencies, lifts infrastructure, optionally starts app containers, verifies health endpoints, and can emit a harness bundle under `generated/harness/`.
 
-### Option B — Manual path
+### Option C — Manual host services
+
+This path runs Redis, Weaviate, Neo4j, and Temporal in Docker, then runs the
+Node API and worker on the host for faster edit/test cycles.
 
 ```bash
 pnpm install
