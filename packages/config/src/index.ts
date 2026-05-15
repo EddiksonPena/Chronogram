@@ -47,7 +47,12 @@ export interface AppConfig {
   temporalExecutionMode: "auto" | "local" | "temporal";
   autoTriggerWorkflows: boolean;
   otelExporterEndpoint: string | undefined;
+  embeddingProvider: "hash" | "transformers";
   embeddingModel: string;
+  embeddingDtype: "fp32" | "fp16" | "q8" | "int8" | "uint8";
+  embeddingDimensions: number;
+  embeddingQueryInstruction: string;
+  embeddingCacheDir: string;
   rerankerModel: string;
   extractionModel: string;
   temporalGraphBackend: "neo4j-temporal" | "graphiti-python" | "graphiti-scaffold";
@@ -144,7 +149,23 @@ export const loadConfig = (
           : "auto",
     autoTriggerWorkflows: parseBoolean(env.AUTO_TRIGGER_WORKFLOWS, true),
     otelExporterEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
-    embeddingModel: env.EMBEDDING_MODEL ?? "nomic-embed-text",
+    embeddingProvider: env.EMBEDDING_PROVIDER === "hash" ? "hash" : "transformers",
+    embeddingModel: env.EMBEDDING_MODEL ?? "onnx-community/Qwen3-Embedding-0.6B-ONNX",
+    embeddingDtype:
+      env.EMBEDDING_DTYPE === "fp32"
+        ? "fp32"
+        : env.EMBEDDING_DTYPE === "fp16"
+          ? "fp16"
+          : env.EMBEDDING_DTYPE === "int8"
+            ? "int8"
+            : env.EMBEDDING_DTYPE === "uint8"
+              ? "uint8"
+              : "q8",
+    embeddingDimensions: parseNumber(env.EMBEDDING_DIMENSIONS, 1024),
+    embeddingQueryInstruction:
+      env.EMBEDDING_QUERY_INSTRUCTION ??
+      "Given an agent memory recall query, retrieve relevant memories that answer or contextualize the query",
+    embeddingCacheDir: resolvePath(baseDir, env.EMBEDDING_CACHE_DIR ?? "./data/models/transformers"),
     rerankerModel: env.RERANKER_MODEL ?? "bge-reranker-base",
     extractionModel: env.EXTRACTION_MODEL ?? "qwen2.5:14b",
     temporalGraphBackend:

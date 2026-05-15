@@ -17,6 +17,7 @@
   "dependencies": {
     "@chronogram/config": "workspace:*",
     "@chronogram/schemas": "workspace:*",
+    "@huggingface/transformers": "^3.8.0",
     "@temporalio/client": "^1.16.1",
     "@temporalio/workflow": "^1.16.1",
     "redis": "^5.8.2"

@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: apps/memory-api/Dockerfile
+      args:
+        WARM_EMBEDDING_MODEL: ${WARM_EMBEDDING_MODEL:-true}
     env_file:
       - path: .env
         required: false
@@ -23,9 +25,15 @@ services:
       TEMPORAL_WORKFLOW_TASK_QUEUE: ${APP_TEMPORAL_WORKFLOW_TASK_QUEUE:-chronogram-memory-module}
       TEMPORAL_EXECUTION_MODE: ${TEMPORAL_EXECUTION_MODE:-auto}
       TEMPORAL_GRAPH_BACKEND: ${TEMPORAL_GRAPH_BACKEND:-neo4j-temporal}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-transformers}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-onnx-community/Qwen3-Embedding-0.6B-ONNX}
+      EMBEDDING_DTYPE: ${EMBEDDING_DTYPE:-q8}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
+      EMBEDDING_QUERY_INSTRUCTION: ${EMBEDDING_QUERY_INSTRUCTION:-Given an agent memory recall query, retrieve relevant memories that answer or contextualize the query}
+      EMBEDDING_CACHE_DIR: ${APP_EMBEDDING_CACHE_DIR:-/app/data/models/transformers}
       RERANKER_MODEL: ${RERANKER_MODEL:-bge-reranker-base}
       EXTRACTION_MODEL: ${EXTRACTION_MODEL:-qwen2.5:14b}
+      GRAPHITI_EMBEDDING_MODEL: ${GRAPHITI_EMBEDDING_MODEL:-nomic-embed-text}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${APP_OTEL_EXPORTER_OTLP_ENDPOINT:-http://telemetry-collector:4318}
       MAX_REQUEST_BYTES: ${MAX_REQUEST_BYTES:-1048576}
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
@@ -60,6 +68,8 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
+      args:
+        WARM_EMBEDDING_MODEL: ${WARM_EMBEDDING_MODEL:-true}
     env_file:
       - path: .env
         required: false
@@ -77,9 +87,15 @@ services:
       TEMPORAL_WORKFLOW_TASK_QUEUE: ${APP_TEMPORAL_WORKFLOW_TASK_QUEUE:-chronogram-memory-module}
       TEMPORAL_EXECUTION_MODE: ${TEMPORAL_EXECUTION_MODE:-auto}
       TEMPORAL_GRAPH_BACKEND: ${TEMPORAL_GRAPH_BACKEND:-neo4j-temporal}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-transformers}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-onnx-community/Qwen3-Embedding-0.6B-ONNX}
+      EMBEDDING_DTYPE: ${EMBEDDING_DTYPE:-q8}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
+      EMBEDDING_QUERY_INSTRUCTION: ${EMBEDDING_QUERY_INSTRUCTION:-Given an agent memory recall query, retrieve relevant memories that answer or contextualize the query}
+      EMBEDDING_CACHE_DIR: ${APP_EMBEDDING_CACHE_DIR:-/app/data/models/transformers}
       RERANKER_MODEL: ${RERANKER_MODEL:-bge-reranker-base}
       EXTRACTION_MODEL: ${EXTRACTION_MODEL:-qwen2.5:14b}
+      GRAPHITI_EMBEDDING_MODEL: ${GRAPHITI_EMBEDDING_MODEL:-nomic-embed-text}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${APP_OTEL_EXPORTER_OTLP_ENDPOINT:-http://telemetry-collector:4318}
       MAX_REQUEST_BYTES: ${MAX_REQUEST_BYTES:-1048576}
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}

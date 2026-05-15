@@ -16,6 +16,16 @@ This guide explains how to set up `Chronogram`, launch the local stack, and exer
 pnpm install
 ```
 
+To prefetch the default product embedding model outside Docker, run:
+
+```bash
+pnpm chronogram:warm-embeddings
+```
+
+The default embedding runtime is `onnx-community/Qwen3-Embedding-0.6B-ONNX` with
+`EMBEDDING_DTYPE=q8`. Docker Compose warms this model during app image builds
+unless `WARM_EMBEDDING_MODEL=false` is set.
+
 ## Configure
 
 Copy the sample environment file:
@@ -28,6 +38,7 @@ Defaults are designed for local development:
 
 - API: `127.0.0.1:4000`
 - Worker: `127.0.0.1:4010`
+- Embeddings: quantized Qwen via Transformers.js
 - Redis: `127.0.0.1:6380`
 - Weaviate: `127.0.0.1:8080`
 - Neo4j HTTP: `127.0.0.1:7474`

@@ -13,13 +13,13 @@ import type {
   TemporalEpisodeUpsert,
 } from "./types.js";
 import {
-  embed,
   escapeGraphQl,
   neo4jHttpUrl,
   roundScore,
   tokenize,
   toUuid,
 } from "./utils.js";
+import type { EmbeddingService } from "./embeddings.js";
 
 const WEAVIATE_CLASSES: Record<MemoryModuleId, string> = {
   semantic: "ChronogramSemanticChunk",
@@ -106,7 +106,10 @@ export class RedisWorkingMemoryAdapter {
 export class WeaviateSemanticAdapter {
   private readonly schemaReady = new Set<string>();
 
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly embeddings: EmbeddingService,
+  ) {}
 
   async upsertChunks(chunks: StoredChunk[], moduleId: MemoryModuleId): Promise<void> {
     if (chunks.length === 0) {
@@ -117,28 +120,31 @@ export class WeaviateSemanticAdapter {
 
     try {
       await this.ensureSchema(className);
+      const objects = await Promise.all(
+        chunks.map(async (chunk) => ({
+          class: className,
+          id: toUuid(chunk.artifact.id),
+          vector: await this.embeddings.embed(chunk.artifact.content, "document"),
+          properties: {
+            artifactId: chunk.artifact.id,
+            parentId: chunk.parentId,
+            scope: chunk.artifact.scope,
+            type: chunk.artifact.type,
+            moduleId,
+            content: chunk.artifact.content,
+            summary: chunk.artifact.summary ?? "",
+            tags: chunk.artifact.tags,
+            entities: chunk.entities,
+            salience: chunk.artifact.salience ?? 0,
+            createdAt: chunk.artifact.createdAt,
+          },
+        })),
+      );
       await fetch(`${this.baseUrl}/v1/batch/objects`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          objects: chunks.map((chunk) => ({
-            class: className,
-            id: toUuid(chunk.artifact.id),
-            vector: embed(chunk.artifact.content),
-            properties: {
-              artifactId: chunk.artifact.id,
-              parentId: chunk.parentId,
-              scope: chunk.artifact.scope,
-              type: chunk.artifact.type,
-              moduleId,
-              content: chunk.artifact.content,
-              summary: chunk.artifact.summary ?? "",
-              tags: chunk.artifact.tags,
-              entities: chunk.entities,
-              salience: chunk.artifact.salience ?? 0,
-              createdAt: chunk.artifact.createdAt,
-            },
-          })),
+          objects,
         }),
       });
     } catch {
@@ -156,7 +162,7 @@ export class WeaviateSemanticAdapter {
 
     try {
       await this.ensureSchema(className);
-      const vector = embed(query);
+      const vector = await this.embeddings.embed(query, "query");
       const whereClause = scope
         ? `where:{path:[\"scope\"],operator:Equal,valueText:\"${escapeGraphQl(scope)}\"},`
         : "";

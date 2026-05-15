@@ -21,6 +21,7 @@ import {
   RedisWorkingMemoryAdapter,
   WeaviateSemanticAdapter,
 } from "./adapters.js";
+import { createEmbeddingService } from "./embeddings.js";
 import { createDefaultTemporalGraphAdapter, createMemoryModules } from "./modules.js";
 import { createStateStore } from "./state.js";
 import { buildPromotionRequest, planConversationCompaction, toCompactionResponse } from "./lifecycle.js";
@@ -55,8 +56,9 @@ export interface MemoryOs {
 export const createMemoryRouter = (config: AppConfig): MemoryOs => {
   const stateStore = createStateStore(config);
   const persistenceFile = stateStore.describe();
+  const embeddingService = createEmbeddingService(config);
   const redisAdapter = new RedisWorkingMemoryAdapter(config.redisUrl);
-  const weaviateAdapter = new WeaviateSemanticAdapter(config.weaviateHttpUrl);
+  const weaviateAdapter = new WeaviateSemanticAdapter(config.weaviateHttpUrl, embeddingService);
   const neo4jAdapter = new Neo4jGraphAdapter(config);
   const temporalGraphAdapter = createDefaultTemporalGraphAdapter(config);
   const modules = createMemoryModules({

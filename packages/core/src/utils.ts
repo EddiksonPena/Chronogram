@@ -232,25 +232,6 @@ export const edgeKey = (from: string, to: string): string =>
 
 export const roundScore = (value: number): number => Math.round(value * 1000) / 1000;
 
-export const embed = (content: string, dimensions = 16): number[] => {
-  const vector = new Array<number>(dimensions).fill(0);
-  const tokens = tokenize(content);
-  if (tokens.length === 0) {
-    return vector;
-  }
-
-  for (const token of tokens) {
-    const digest = createHash("sha256").update(token).digest();
-    for (let index = 0; index < dimensions; index += 1) {
-      const normalized = (digest[index] ?? 0) / 255;
-      vector[index] = (vector[index] ?? 0) + normalized * 2 - 1;
-    }
-  }
-
-  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0)) || 1;
-  return vector.map((value) => roundScore(value / magnitude));
-};
-
 export const toUuid = (value: string): string => {
   const hex = createHash("sha256").update(value).digest("hex").slice(0, 32);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;

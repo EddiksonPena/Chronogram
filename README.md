@@ -334,6 +334,20 @@ cp .env.production.example .env   # Customize secrets before trusting this path
 docker compose --profile app up -d --build
 ```
 
+By default, the Compose app profile builds the Memory API and worker images with
+`WARM_EMBEDDING_MODEL=true`, which downloads and caches the quantized Qwen
+embedding model declared by:
+
+```bash
+EMBEDDING_PROVIDER=transformers
+EMBEDDING_MODEL=onnx-community/Qwen3-Embedding-0.6B-ONNX
+EMBEDDING_DTYPE=q8
+EMBEDDING_DIMENSIONS=1024
+```
+
+Set `WARM_EMBEDDING_MODEL=false` for faster local image rebuilds, or set
+`EMBEDDING_PROVIDER=hash` for deterministic offline smoke tests.
+
 CI publishes immutable tags via [`.github/workflows/release-images.yml`](.github/workflows/release-images.yml).
 
 ### Kubernetes
@@ -439,7 +453,8 @@ Use this framing in internal reviews and stakeholder updates so expectations sta
 Optional advanced topic — **Python Graphiti bridge**:
 
 - Set `TEMPORAL_GRAPH_BACKEND=graphiti-python`.
-- Provision `GRAPHITI_PYTHON_BIN`, embeddings + LLM env vars (`OLLAMA_HOST`, `EXTRACTION_MODEL`, `EMBEDDING_MODEL`, etc.).
+- Provision `GRAPHITI_PYTHON_BIN` plus Graphiti's Ollama-backed model env vars
+  (`OLLAMA_HOST`, `EXTRACTION_MODEL`, `GRAPHITI_EMBEDDING_MODEL`, etc.).
 - Pin `GRAPHITI_GROUP_ID` for namespace isolation.
 
 ---

@@ -12,14 +12,16 @@
     "chronogram:preflight": "node scripts/production-readiness.mjs preflight",
     "chronogram:smoke": "node scripts/production-readiness.mjs smoke",
     "chronogram:ui": "node scripts/bootstrap.mjs ui",
+    "chronogram:warm-embeddings": "node scripts/warm-embedding-model.mjs",
     "dev": "pnpm --parallel --filter @chronogram/memory-api --filter @chronogram/worker dev",
     "start:memory-api": "pnpm --filter @chronogram/memory-api start",
     "start:worker": "pnpm --filter @chronogram/worker start",
     "lint": "pnpm -r lint",
-    "test": "tsx --test \"packages/core/src/**/*.test.ts\"",
+    "test": "tsx --test \"packages/*/src/**/*.test.ts\"",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
+    "@huggingface/transformers": "^3.8.0",
     "@types/node": "^24.8.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"

@@ -61,10 +61,7 @@ async def _run() -> None:
     )
     ollama_api_key = os.environ.get("OLLAMA_API_KEY", "chronogram-local")
     llm_model = os.environ.get("GRAPHITI_LLM_MODEL", os.environ.get("EXTRACTION_MODEL", "qwen2.5:14b"))
-    embedding_model = os.environ.get(
-        "GRAPHITI_EMBEDDING_MODEL",
-        os.environ.get("EMBEDDING_MODEL", "nomic-embed-text"),
-    )
+    embedding_model = os.environ.get("GRAPHITI_EMBEDDING_MODEL", "nomic-embed-text")
 
     llm_config = LLMConfig(
         api_key=ollama_api_key,
