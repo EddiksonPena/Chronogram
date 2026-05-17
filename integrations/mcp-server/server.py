@@ -5,11 +5,20 @@ Run: uv run python server.py   (stdio for Hermes auto-discovery)
      uv run python server.py --http 8000   (HTTP for manual testing)
 """
 import sys
+import os
 import httpx
 from fastmcp import FastMCP
 
 mcp = FastMCP("Chronogram")
-BASE = "http://127.0.0.1:4000"
+BASE = os.environ.get("CHRONOGRAM_BASE_URL", "http://127.0.0.1:4000").rstrip("/")
+API_KEY = os.environ.get("CHRONOGRAM_API_KEY", "").strip()
+
+
+def auth_headers() -> dict[str, str]:
+    headers = {"content-type": "application/json"}
+    if API_KEY:
+        headers["x-api-key"] = API_KEY
+    return headers
 
 
 @mcp.tool
@@ -30,7 +39,7 @@ async def chronogram_remember(
 ) -> dict:
     """Store a fact, decision, discovery, or correction in Chronogram memory.
 
-    scope — one of: 'user-profile', 'project:<name>', 'skill:<name>', 'workspace', 'session:<id>'
+    scope — one of: 'session', 'agent', 'user', 'user-profile', 'workspace', 'global', 'project:<name>', 'skill:<name>', 'session:<id>'
     content — the fact or discovery to remember
     source — what produced this memory (default: hermes-agent)
     tags — optional list of categorical tags for filtering later
@@ -39,6 +48,7 @@ async def chronogram_remember(
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BASE}/v1/memories/ingest",
+            headers=auth_headers(),
             json={"scope": scope, "source": source, "tags": tags or [], "content": content},
             timeout=10,
         )
@@ -60,6 +70,7 @@ async def chronogram_recall(
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BASE}/v1/memories/recall",
+            headers=auth_headers(),
             json={"query": query, "scope": scope, "includeDiagnostics": True},
             timeout=15,
         )
@@ -83,6 +94,7 @@ async def chronogram_compact(
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BASE}/v1/memories/compact",
+            headers=auth_headers(),
             json={
                 "scope": scope,
                 "occupancyRatio": 0.75,
@@ -104,6 +116,7 @@ async def chronogram_feedback(artifact_id: str, useful: bool) -> dict:
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BASE}/v1/memories/feedback",
+            headers=auth_headers(),
             json={"artifactId": artifact_id, "useful": useful},
             timeout=5,
         )
@@ -120,7 +133,7 @@ async def chronogram_list(scope: str | None = None) -> dict:
         params = {}
         if scope:
             params["scope"] = scope
-        resp = await client.get(f"{BASE}/v1/memories", params=params, timeout=10)
+        resp = await client.get(f"{BASE}/v1/memories", params=params, headers=auth_headers(), timeout=10)
         resp.raise_for_status()
         return resp.json()
 

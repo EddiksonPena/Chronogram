@@ -10,7 +10,15 @@ import sys
 import urllib.request
 import urllib.error
 
-CHRONOGRAM_URL = "http://127.0.0.1:4000"
+CHRONOGRAM_URL = os.environ.get("CHRONOGRAM_BASE_URL", "http://127.0.0.1:4000").rstrip("/")
+CHRONOGRAM_API_KEY = os.environ.get("CHRONOGRAM_API_KEY", "").strip()
+
+
+def headers():
+    value = {"Content-Type": "application/json"}
+    if CHRONOGRAM_API_KEY:
+        value["x-api-key"] = CHRONOGRAM_API_KEY
+    return value
 
 
 def check_health():
@@ -45,7 +53,7 @@ def recall_from_chronogram(scope, query, label):
         req = urllib.request.Request(
             f"{CHRONOGRAM_URL}/v1/memories/recall",
             data=json.dumps({"query": query, "scope": scope, "includeDiagnostics": False}).encode(),
-            headers={"Content-Type": "application/json"}, method="POST"
+            headers=headers(), method="POST"
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())

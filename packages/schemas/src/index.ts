@@ -9,8 +9,124 @@ export type MemoryScope =
   | "session"
   | "agent"
   | "user"
+  | "user-profile"
   | "workspace"
-  | "global";
+  | "global"
+  | `project:${string}`
+  | `skill:${string}`
+  | `session:${string}`;
+
+const MEMORY_TYPES = new Set<MemoryType>(["working", "episodic", "semantic", "procedural", "graph"]);
+const FIXED_MEMORY_SCOPES = new Set<string>(["session", "agent", "user", "user-profile", "workspace", "global"]);
+const CONVERSATION_ROLES = new Set<ConversationTurn["role"]>(["system", "user", "assistant", "tool"]);
+
+export class ValidationError extends Error {
+  readonly statusCode = 422;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
+export const isMemoryType = (value: unknown): value is MemoryType =>
+  typeof value === "string" && MEMORY_TYPES.has(value as MemoryType);
+
+export const isMemoryScope = (value: unknown): value is MemoryScope => {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const trimmed = value.trim();
+  if (FIXED_MEMORY_SCOPES.has(trimmed)) {
+    return true;
+  }
+
+  return /^(project|skill|session):[a-zA-Z0-9][a-zA-Z0-9._/@-]{0,127}$/u.test(trimmed);
+};
+
+const asRecord = (payload: unknown, label: string): Record<string, unknown> => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new ValidationError(`${label} must be a JSON object.`);
+  }
+  return payload as Record<string, unknown>;
+};
+
+const requiredString = (record: Record<string, unknown>, key: string): string => {
+  const value = record[key];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ValidationError(`${key} must be a non-empty string.`);
+  }
+  return value.trim();
+};
+
+const optionalString = (record: Record<string, unknown>, key: string): string | undefined => {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new ValidationError(`${key} must be a string.`);
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
+const requiredScope = (record: Record<string, unknown>, key = "scope"): MemoryScope => {
+  const value = requiredString(record, key);
+  if (!isMemoryScope(value)) {
+    throw new ValidationError(
+      `${key} must be one of session, agent, user, user-profile, workspace, global, project:<id>, skill:<id>, or session:<id>.`,
+    );
+  }
+  return value;
+};
+
+const optionalScope = (record: Record<string, unknown>, key = "scope"): MemoryScope | undefined => {
+  const value = optionalString(record, key);
+  if (!value) {
+    return undefined;
+  }
+  if (!isMemoryScope(value)) {
+    throw new ValidationError(
+      `${key} must be one of session, agent, user, user-profile, workspace, global, project:<id>, skill:<id>, or session:<id>.`,
+    );
+  }
+  return value;
+};
+
+const optionalStringArray = (record: Record<string, unknown>, key: string): string[] | undefined => {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new ValidationError(`${key} must be an array of strings.`);
+  }
+  return value.map((entry) => entry.trim()).filter(Boolean);
+};
+
+const optionalBoolean = (record: Record<string, unknown>, key: string): boolean | undefined => {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    throw new ValidationError(`${key} must be a boolean.`);
+  }
+  return value;
+};
+
+const optionalNumber = (record: Record<string, unknown>, key: string): number | undefined => {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new ValidationError(`${key} must be a finite number.`);
+  }
+  return value;
+};
 
 export interface Provenance {
   source: string;
@@ -49,6 +165,30 @@ export interface IngestMemoryRequest {
   sessionId?: string;
 }
 
+export const parseIngestMemoryRequest = (payload: unknown): IngestMemoryRequest => {
+  const record = asRecord(payload, "Ingest memory request");
+  const typeHint = optionalString(record, "typeHint");
+  if (typeHint && !isMemoryType(typeHint)) {
+    throw new ValidationError("typeHint must be one of working, episodic, semantic, procedural, or graph.");
+  }
+
+  const request: IngestMemoryRequest = {
+    scope: requiredScope(record),
+    content: requiredString(record, "content"),
+    source: requiredString(record, "source"),
+  };
+  const sourceId = optionalString(record, "sourceId");
+  const observedAt = optionalString(record, "observedAt");
+  const tags = optionalStringArray(record, "tags");
+  const sessionId = optionalString(record, "sessionId");
+  if (sourceId) request.sourceId = sourceId;
+  if (observedAt) request.observedAt = observedAt;
+  if (tags) request.tags = tags;
+  if (typeHint) request.typeHint = typeHint as MemoryType;
+  if (sessionId) request.sessionId = sessionId;
+  return request;
+};
+
 export interface IngestMemoryResponse {
   memoryId: string;
   accepted: boolean;
@@ -67,6 +207,31 @@ export interface RecallMemoryRequest {
   includeDiagnostics?: boolean;
   sessionId?: string;
 }
+
+export const parseRecallMemoryRequest = (payload: unknown): RecallMemoryRequest => {
+  const record = asRecord(payload, "Recall memory request");
+  const memoryTypes = optionalStringArray(record, "memoryTypes");
+  if (memoryTypes?.some((type) => !isMemoryType(type))) {
+    throw new ValidationError("memoryTypes entries must be working, episodic, semantic, procedural, or graph.");
+  }
+  const limit = optionalNumber(record, "limit");
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 50)) {
+    throw new ValidationError("limit must be an integer between 1 and 50.");
+  }
+
+  const request: RecallMemoryRequest = {
+    query: requiredString(record, "query"),
+  };
+  const scope = optionalScope(record);
+  const includeDiagnostics = optionalBoolean(record, "includeDiagnostics");
+  const sessionId = optionalString(record, "sessionId");
+  if (scope) request.scope = scope;
+  if (memoryTypes) request.memoryTypes = memoryTypes as MemoryType[];
+  if (limit !== undefined) request.limit = limit;
+  if (includeDiagnostics !== undefined) request.includeDiagnostics = includeDiagnostics;
+  if (sessionId) request.sessionId = sessionId;
+  return request;
+};
 
 export interface RecallCandidate {
   artifactId: string;
@@ -115,6 +280,49 @@ export interface CompactConversationRequest {
   force?: boolean;
 }
 
+export const parseCompactConversationRequest = (payload: unknown): CompactConversationRequest => {
+  const record = asRecord(payload, "Compact conversation request");
+  const rawMessages = record.messages;
+  if (!Array.isArray(rawMessages)) {
+    throw new ValidationError("messages must be an array.");
+  }
+
+  const messages = rawMessages.map((message, index): ConversationTurn => {
+    const entry = asRecord(message, `messages[${index}]`);
+    const role = requiredString(entry, "role");
+    if (!CONVERSATION_ROLES.has(role as ConversationTurn["role"])) {
+      throw new ValidationError(`messages[${index}].role must be system, user, assistant, or tool.`);
+    }
+    const turn: ConversationTurn = {
+      role: role as ConversationTurn["role"],
+      content: requiredString(entry, "content"),
+    };
+    const createdAt = optionalString(entry, "createdAt");
+    if (createdAt) turn.createdAt = createdAt;
+    return turn;
+  });
+
+  const request: CompactConversationRequest = {
+    scope: requiredScope(record),
+    messages,
+  };
+  const sessionId = optionalString(record, "sessionId");
+  const conversationId = optionalString(record, "conversationId");
+  const currentWindowTokens = optionalNumber(record, "currentWindowTokens");
+  const maxWindowTokens = optionalNumber(record, "maxWindowTokens");
+  const occupancyRatio = optionalNumber(record, "occupancyRatio");
+  const thresholdRatio = optionalNumber(record, "thresholdRatio");
+  const force = optionalBoolean(record, "force");
+  if (sessionId) request.sessionId = sessionId;
+  if (conversationId) request.conversationId = conversationId;
+  if (currentWindowTokens !== undefined) request.currentWindowTokens = currentWindowTokens;
+  if (maxWindowTokens !== undefined) request.maxWindowTokens = maxWindowTokens;
+  if (occupancyRatio !== undefined) request.occupancyRatio = occupancyRatio;
+  if (thresholdRatio !== undefined) request.thresholdRatio = thresholdRatio;
+  if (force !== undefined) request.force = force;
+  return request;
+};
+
 export interface CompactConversationResponse {
   triggered: boolean;
   reason: string;
@@ -135,6 +343,22 @@ export interface FeedbackMemoryRequest {
   useful: boolean;
   notes?: string;
 }
+
+export const parseFeedbackMemoryRequest = (payload: unknown): FeedbackMemoryRequest => {
+  const record = asRecord(payload, "Feedback memory request");
+  const useful = record.useful;
+  if (typeof useful !== "boolean") {
+    throw new ValidationError("useful must be a boolean.");
+  }
+
+  const request: FeedbackMemoryRequest = {
+    artifactId: requiredString(record, "artifactId"),
+    useful,
+  };
+  const notes = optionalString(record, "notes");
+  if (notes) request.notes = notes;
+  return request;
+};
 
 export interface FeedbackMemoryResponse {
   artifactId: string;

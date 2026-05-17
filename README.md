@@ -61,7 +61,7 @@ It is **not** a turnkey multi-tenant SaaS. Plan to supply identity, tenancy, quo
 | You get | You do not get (today) |
 |--------|-------------------------|
 | HTTP Memory API (`/v1/memories/*`, metrics, workflows view) | A hosted SaaS UI or multitenant billing |
-| Hybrid retrieval orchestration across Redis / Weaviate / Neo4j | MCP or FastAPI facades bundled in-repo (planned in docs only) |
+| Hybrid retrieval orchestration across Redis / Weaviate / Neo4j | Hosted MCP gateway or managed adapter distribution |
 | Feedback-driven salience and adaptive compaction | A fully scripted production CD path tested on every fork |
 | Docker Compose stacks, GHCR images, K8s reference manifests | Stateful services auto-provisioned in every `kubectl apply` snippet |
 | Grafana / Prometheus configs and alerting examples | Opinionated SOC2-style compliance toolkit |
@@ -130,13 +130,16 @@ curl http://127.0.0.1:4000/health
 curl http://127.0.0.1:4010/health
 ```
 
-Prefer a guided UX? Install deps, then:
+Prefer a guided local console? Install deps, then:
 
 ```bash
 pnpm chronogram:ui
 ```
 
-Open [`http://127.0.0.1:4020`](http://127.0.0.1:4020).
+Open [`http://127.0.0.1:4020`](http://127.0.0.1:4020). The console shows
+bootstrap status, service health, module metrics, recent memories, harness
+snippets, and an interactive memory graph with draggable artifact/tag/module
+nodes.
 
 ---
 
@@ -286,6 +289,8 @@ Worker highlights:
 
 Chronogram is transport-agnostic HTTP. For **recall → augment prompt → respond → ingest** wiring with popular agent stacks, copy the patterns in [**`docs/integration/harness-integrations.md`**](docs/integration/harness-integrations.md) (minimal `fetch` helpers, an OpenAI Chat Completions example using `openai` on npm, LangGraph-style graph notes, and Crew-style tool hooks).
 
+The in-repo MCP adapter under [`integrations/mcp-server`](integrations/mcp-server) reads `CHRONOGRAM_BASE_URL` and `CHRONOGRAM_API_KEY`; use it as a local bridge for Codex/Claude/Cursor-style harnesses. Supported scopes are `session`, `agent`, `user`, `user-profile`, `workspace`, `global`, `project:<id>`, `skill:<id>`, and `session:<id>`.
+
 ---
 
 ## Architecture
@@ -340,6 +345,7 @@ Local file-backed snapshots default to `./data` when `.env` uses `MEMORY_STATE_B
 | `node scripts/bootstrap.mjs init` | First-time workstation setup plus optional stack orchestration. |
 | `node scripts/bootstrap.mjs connect` | Echo harness snippets for external agent stacks. |
 | `node scripts/bootstrap.mjs down` | Tear down compose profiles started by onboarding. |
+| `pnpm chronogram:ui` | Launch the local memory console with health checks, harness snippets, and graph visibility. |
 
 Harness payloads land in [`generated/harness/`](generated/harness/) (`chronogram-harness-config.{json,md}`) with `.env`-style exports, fetch samples, curl smoke snippets.
 
@@ -407,7 +413,7 @@ pnpm chronogram:smoke
 pnpm chronogram:load -- --requests 60 --concurrency 6
 ```
 
-These wrap [`scripts/production-readiness.mjs`](scripts/production-readiness.mjs)—pair them with staged smoke tests hitting every dependency tier.
+These wrap [`scripts/production-readiness.mjs`](scripts/production-readiness.mjs)—pair them with staged smoke tests hitting every dependency tier. The smoke script defaults to a longer timeout for cold local Transformers/Qwen initialization; override with `CHRONOGRAM_SMOKE_TIMEOUT_MS` or `--timeout-ms`.
 
 ---
 
@@ -444,7 +450,7 @@ Responsible disclosure guidelines live in **`SECURITY.md`**.
 | Stage | Suitability |
 |-------|--------------|
 | **Local / OSS evaluation** | **Ready** — Compose + docs + onboarding UI keep spin-up repeatable. CI enforces lint/build/typecheck/tests. GHCR publishes tags. |
-| **Staging clusters** | **Partial** — You must bolt on managed infra, ingress, rotated secrets, and smoke automation. Harness integration **remains HTTP-first** (bring your own MCP if needed). |
+| **Staging clusters** | **Partial** — You must bolt on managed infra, ingress, rotated secrets, and smoke automation. Harness integration remains HTTP-first, with the bundled MCP bridge suitable for local adapter testing. |
 | **Highly regulated enterprise production** | **Not endorsed yet** — You still need hardened dependency bundles, audited authorization semantics, repeatable CD plus rollback rehearsal, and field-tested ops runbooks. Finish those externally before staking production SLAs on this distribution. |
 
 Use this framing in internal reviews and stakeholder updates so expectations stay grounded.

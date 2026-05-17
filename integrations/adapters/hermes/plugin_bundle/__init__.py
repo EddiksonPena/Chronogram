@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -22,7 +23,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-CHRONOGRAM_URL = "http://127.0.0.1:4000"
+CHRONOGRAM_URL = os.environ.get("CHRONOGRAM_BASE_URL", "http://127.0.0.1:4000").rstrip("/")
+CHRONOGRAM_API_KEY = os.environ.get("CHRONOGRAM_API_KEY", "").strip()
 REQUEST_TIMEOUT = 8.0
 MAX_PERSIST_MSG_CHARS = 600
 SKIP_TOOLS = {"memory", "clarify", "todo", "session_search", "skills_list",
@@ -34,7 +36,8 @@ MCP_CHRONO_TOOLS = {"mcp_chronogram_health", "mcp_chronogram_remember",
 
 def _post_json(client: httpx.Client, path: str, body: dict, timeout: float = REQUEST_TIMEOUT) -> Optional[dict]:
     try:
-        resp = client.post(f"{CHRONOGRAM_URL}{path}", json=body, timeout=timeout)
+        headers = {"x-api-key": CHRONOGRAM_API_KEY} if CHRONOGRAM_API_KEY else None
+        resp = client.post(f"{CHRONOGRAM_URL}{path}", json=body, headers=headers, timeout=timeout)
         resp.raise_for_status()
         return resp.json()
     except Exception:
@@ -43,7 +46,8 @@ def _post_json(client: httpx.Client, path: str, body: dict, timeout: float = REQ
 
 def _get_json(client: httpx.Client, path: str, timeout: float = REQUEST_TIMEOUT) -> Optional[dict]:
     try:
-        resp = client.get(f"{CHRONOGRAM_URL}{path}", timeout=timeout)
+        headers = {"x-api-key": CHRONOGRAM_API_KEY} if CHRONOGRAM_API_KEY else None
+        resp = client.get(f"{CHRONOGRAM_URL}{path}", headers=headers, timeout=timeout)
         resp.raise_for_status()
         return resp.json()
     except Exception:

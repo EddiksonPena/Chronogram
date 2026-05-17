@@ -55,15 +55,16 @@ export class RedisWorkingMemoryAdapter {
     scope: MemoryScope,
     moduleId: MemoryModuleId,
     ...artifactIds: string[]
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (artifactIds.length === 0) {
-      return;
+      return true;
     }
 
-    await this.run(async (client) => {
+    return this.run(async (client) => {
       await client.lPush(this.key(scope, moduleId), artifactIds);
       await client.lTrim(this.key(scope, moduleId), 0, 49);
-    });
+      return true;
+    }, false);
   }
 
   async getRecent(scope: MemoryScope | undefined, moduleId: MemoryModuleId): Promise<string[]> {
@@ -111,9 +112,9 @@ export class WeaviateSemanticAdapter {
     private readonly embeddings: EmbeddingService,
   ) {}
 
-  async upsertChunks(chunks: StoredChunk[], moduleId: MemoryModuleId): Promise<void> {
+  async upsertChunks(chunks: StoredChunk[], moduleId: MemoryModuleId): Promise<boolean> {
     if (chunks.length === 0) {
-      return;
+      return true;
     }
 
     const className = WEAVIATE_CLASSES[moduleId];
@@ -140,15 +141,16 @@ export class WeaviateSemanticAdapter {
           },
         })),
       );
-      await fetch(`${this.baseUrl}/v1/batch/objects`, {
+      const response = await fetch(`${this.baseUrl}/v1/batch/objects`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           objects,
         }),
       });
+      return response.ok;
     } catch {
-      return;
+      return false;
     }
   }
 
@@ -222,7 +224,7 @@ export class WeaviateSemanticAdapter {
       return;
     }
 
-    await fetch(`${this.baseUrl}/v1/schema`, {
+    const created = await fetch(`${this.baseUrl}/v1/schema`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -244,6 +246,9 @@ export class WeaviateSemanticAdapter {
       }),
     });
 
+    if (!created.ok) {
+      throw new Error(`Failed to create Weaviate schema class ${className}: HTTP ${created.status}.`);
+    }
     this.schemaReady.add(className);
   }
 }
@@ -263,9 +268,9 @@ export class Neo4jGraphAdapter {
     rootArtifact: MemoryArtifact,
     chunks: StoredChunk[],
     moduleId: MemoryModuleId,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (chunks.length === 0) {
-      return;
+      return true;
     }
 
     const rows = chunks.map((chunk) => ({
@@ -276,7 +281,7 @@ export class Neo4jGraphAdapter {
       moduleId,
     }));
 
-    await this.query(
+    const memoryWrite = await this.query(
       `
       UNWIND $rows AS row
       MERGE (m:Memory {artifactId: row.artifactId, moduleId: row.moduleId})
@@ -288,9 +293,10 @@ export class Neo4jGraphAdapter {
       `,
       { rows },
     );
+    let ok = memoryWrite.ok;
 
     for (const chunk of chunks) {
-      await this.query(
+      const edgeWrite = await this.query(
         `
         WITH $entities AS entities, $moduleId AS moduleId
         UNWIND range(0, size(entities) - 2) AS idx
@@ -303,7 +309,10 @@ export class Neo4jGraphAdapter {
         `,
         { entities: chunk.entities, moduleId },
       );
+      ok = ok && edgeWrite.ok;
     }
+
+    return ok;
   }
 
   async searchRelatedEntities(
@@ -331,7 +340,7 @@ export class Neo4jGraphAdapter {
     );
 
     const hits = new Map<string, number>();
-    for (const row of payload) {
+    for (const row of payload.rows) {
       const entity = String(row.entity ?? "");
       const weight = Number(row.weight ?? 0);
       if (!entity) {
@@ -342,8 +351,9 @@ export class Neo4jGraphAdapter {
     return hits;
   }
 
-  async reindexFromState(state: PersistedState): Promise<void> {
-    await this.query("MATCH (n) DETACH DELETE n", {});
+  async reindexFromState(state: PersistedState): Promise<boolean> {
+    const clear = await this.query("MATCH (n) DETACH DELETE n", {});
+    let ok = clear.ok;
     const groups = new Map<string, StoredChunk[]>();
     for (const chunk of state.chunks) {
       const current = groups.get(chunk.parentId) ?? [];
@@ -363,14 +373,16 @@ export class Neo4jGraphAdapter {
           : root.type === "procedural"
             ? "procedural"
             : "semantic";
-      await this.upsertMemory(root, chunks, moduleId);
+      ok = (await this.upsertMemory(root, chunks, moduleId)) && ok;
     }
+
+    return ok;
   }
 
   private async query(
     statement: string,
     parameters: Record<string, unknown>,
-  ): Promise<Record<string, unknown>[]> {
+  ): Promise<{ ok: boolean; rows: Record<string, unknown>[] }> {
     try {
       const response = await fetch(this.httpUrl, {
         method: "POST",
@@ -391,23 +403,26 @@ export class Neo4jGraphAdapter {
         }>;
       };
       if (payload.errors?.length) {
-        return [];
+        return { ok: false, rows: [] };
       }
 
       const result = payload.results?.[0];
       if (!result?.columns?.length || !result.data?.length) {
-        return [];
+        return { ok: response.ok, rows: [] };
       }
 
-      return result.data.map((entry) => {
+      return {
+        ok: response.ok,
+        rows: result.data.map((entry) => {
         const row = entry.row ?? [];
         return result.columns!.reduce<Record<string, unknown>>((accumulator, column, index) => {
           accumulator[column] = row[index];
           return accumulator;
         }, {});
-      });
+        }),
+      };
     } catch {
-      return [];
+      return { ok: false, rows: [] };
     }
   }
 }
