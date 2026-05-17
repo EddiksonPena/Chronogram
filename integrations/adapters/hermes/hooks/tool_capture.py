@@ -5,16 +5,25 @@ Receives JSON on stdin with tool_name, args, result, session_id.
 Stores tool call as episodic memory; filters large MCP results.
 """
 import json
+import os
 import sys
 import urllib.request
 import urllib.error
 
-CHRONOGRAM_URL = "http://127.0.0.1:4000"
+CHRONOGRAM_URL = os.environ.get("CHRONOGRAM_BASE_URL", "http://127.0.0.1:4000").rstrip("/")
+CHRONOGRAM_API_KEY = os.environ.get("CHRONOGRAM_API_KEY", "").strip()
 MAX_RESULT_SIZE = 800
 NON_CAPTURE_TOOLS = {"memory", "clarify", "todo", "session_search", "skills_list"}
 MCP_TOOLS = {"mcp_chronogram_health", "mcp_chronogram_remember",
              "mcp_chronogram_recall", "mcp_chronogram_compact",
              "mcp_chronogram_feedback", "mcp_chronogram_list"}
+
+
+def headers():
+    value = {"Content-Type": "application/json"}
+    if CHRONOGRAM_API_KEY:
+        value["x-api-key"] = CHRONOGRAM_API_KEY
+    return value
 
 try:
     ctx = json.load(sys.stdin)
@@ -71,7 +80,7 @@ if tool_name not in MCP_TOOLS:  # Avoid storing Chronogram calls back to Chronog
                 "tags": ["tool-call", tool_name],
                 "content": summary
             }).encode(),
-            headers={"Content-Type": "application/json"},
+            headers=headers(),
             method="POST"
         )
         with urllib.request.urlopen(req, timeout=4) as resp:

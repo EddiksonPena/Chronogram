@@ -333,7 +333,9 @@ export const createMemoryRouter = (config: AppConfig): MemoryOs => {
 
       const diagnostics = request.includeDiagnostics
         ? {
-            storesQueried: ["working-memory", "semantic-store", "graph-store"],
+            storesQueried: Array.from(
+              new Set(moduleResults.flatMap((result) => result.storesQueried)),
+            ),
             reranked: ranked.length > 1,
             totalCandidates: ranked.length,
             queryEntities: Array.from(

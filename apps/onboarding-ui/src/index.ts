@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import {
   buildHarnessBundle,
+  ensureEnvFile,
   getWorkspaceRoot,
   runBootstrap,
   runDoctor,
@@ -16,6 +17,105 @@ const publicDir = resolve(getWorkspaceRoot(), "apps/onboarding-ui/public");
 const sendJson = (res: import("node:http").ServerResponse, statusCode: number, body: unknown): void => {
   res.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body, null, 2));
+};
+
+const memoryHeaders = async (): Promise<Record<string, string>> => {
+  const env = await ensureEnvFile(false);
+  const apiKey = env.values.get("CHRONOGRAM_API_KEY") ?? "";
+  return apiKey.trim() ? { "x-api-key": apiKey.trim() } : {};
+};
+
+const memoryBaseUrl = async (): Promise<string> => {
+  const env = await ensureEnvFile(false);
+  const explicit = env.values.get("CHRONOGRAM_BASE_URL");
+  if (explicit?.trim()) {
+    return explicit.trim().replace(/\/$/u, "");
+  }
+  const port = env.values.get("MEMORY_API_PORT")?.trim() || "4000";
+  return `http://127.0.0.1:${port}`;
+};
+
+const fetchMemoryJson = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+  const baseUrl = await memoryBaseUrl();
+  const headers = {
+    ...(await memoryHeaders()),
+    ...(init.headers as Record<string, string> | undefined),
+  };
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers,
+    signal: AbortSignal.timeout(3500),
+  });
+  if (!response.ok) {
+    throw new Error(`${path} returned HTTP ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+};
+
+const loadMemoryOverview = async (): Promise<Record<string, unknown>> => {
+  const [health, memories, metrics, workflows] = await Promise.allSettled([
+    fetchMemoryJson("/health"),
+    fetchMemoryJson("/v1/memories"),
+    fetchMemoryJson("/v1/metrics/modules"),
+    fetchMemoryJson("/v1/workflows/runs"),
+  ]);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    health: health.status === "fulfilled" ? health.value : null,
+    memories: memories.status === "fulfilled" ? memories.value : { memories: [] },
+    metrics: metrics.status === "fulfilled" ? metrics.value : { modules: [] },
+    workflows: workflows.status === "fulfilled" ? workflows.value : { runs: [] },
+    errors: [health, memories, metrics, workflows]
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason)),
+  };
+};
+
+const seedMemoryDemo = async (): Promise<Record<string, unknown>> => {
+  const samples = [
+    {
+      scope: "workspace",
+      source: "visual-console-demo",
+      typeHint: "semantic",
+      tags: ["qwen", "semantic", "retrieval"],
+      content:
+        "Chronogram uses a quantized Qwen embedding model through Transformers.js to create semantic vectors for memory recall.",
+    },
+    {
+      scope: "workspace",
+      source: "visual-console-demo",
+      typeHint: "episodic",
+      tags: ["docker", "installation", "warmup"],
+      content:
+        "The Docker app profile warms the Qwen q8 embedding model during image builds so the product container starts with the model cached.",
+    },
+    {
+      scope: "workspace",
+      source: "visual-console-demo",
+      typeHint: "procedural",
+      tags: ["workflow", "maintenance", "reindex"],
+      content:
+        "When memory changes, Chronogram can run workflows that reindex semantic chunks, rebuild graph state, and compact conversation context.",
+    },
+  ];
+
+  const results = [];
+  for (const sample of samples) {
+    results.push(
+      await fetchMemoryJson("/v1/memories/ingest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(sample),
+      }),
+    );
+  }
+
+  return {
+    seeded: results.length,
+    results,
+    overview: await loadMemoryOverview(),
+  };
 };
 
 const sendFile = async (
@@ -45,6 +145,14 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, await buildHarnessBundle());
     }
 
+    if (method === "GET" && url.pathname === "/api/memory/overview") {
+      return sendJson(res, 200, await loadMemoryOverview());
+    }
+
+    if (method === "POST" && url.pathname === "/api/memory/seed-demo") {
+      return sendJson(res, 200, await seedMemoryDemo());
+    }
+
     if (method === "POST" && url.pathname === "/api/actions/init") {
       return sendJson(res, 200, await runBootstrap());
     }
@@ -63,6 +171,15 @@ const server = createServer(async (req, res) => {
 
     if (method === "GET" && url.pathname === "/styles.css") {
       return sendFile(res, resolve(publicDir, "styles.css"), "text/css; charset=utf-8");
+    }
+
+    if (method === "GET" && url.pathname.startsWith("/vendor/three.")) {
+      const fileName = url.pathname.split("/").pop() ?? "";
+      return sendFile(
+        res,
+        resolve(getWorkspaceRoot(), "apps/onboarding-ui/node_modules/three/build", fileName),
+        "text/javascript; charset=utf-8",
+      );
     }
 
     return sendJson(res, 404, { error: "not_found" });

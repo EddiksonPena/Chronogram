@@ -83,9 +83,11 @@ test("ingest stores chunks and recall returns relevant context", async () => {
     assert.ok(recall.context.length >= 1);
     assert.match(recall.context[0]?.content ?? "", /Retrieval Orchestrator/i);
     assert.deepEqual(recall.diagnostics?.storesQueried, [
+      "state-store",
       "working-memory",
       "semantic-store",
       "graph-store",
+      "temporal-graph",
     ]);
   } finally {
     await rm(dir, { recursive: true, force: true });

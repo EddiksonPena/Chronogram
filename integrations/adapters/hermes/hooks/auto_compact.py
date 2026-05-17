@@ -5,12 +5,21 @@ Receives: {occupancy_ratio, session_id, messages, ...}
 Compacts actual conversation messages into Chronogram's durable memory.
 """
 import json
+import os
 import sys
 import urllib.request
 import urllib.error
 
-CHRONOGRAM_URL = "http://127.0.0.1:4000"
+CHRONOGRAM_URL = os.environ.get("CHRONOGRAM_BASE_URL", "http://127.0.0.1:4000").rstrip("/")
+CHRONOGRAM_API_KEY = os.environ.get("CHRONOGRAM_API_KEY", "").strip()
 COMPACT_THRESHOLD = 0.70
+
+
+def headers():
+    value = {"Content-Type": "application/json"}
+    if CHRONOGRAM_API_KEY:
+        value["x-api-key"] = CHRONOGRAM_API_KEY
+    return value
 
 try:
     ctx = json.load(sys.stdin)
@@ -42,7 +51,7 @@ try:
     req = urllib.request.Request(
         f"{CHRONOGRAM_URL}/v1/memories/compact",
         data=json.dumps(compact_payload).encode(),
-        headers={"Content-Type": "application/json"}, method="POST"
+        headers=headers(), method="POST"
     )
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read())

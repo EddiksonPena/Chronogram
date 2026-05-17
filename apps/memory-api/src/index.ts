@@ -4,12 +4,14 @@ import type { ServerResponse, IncomingMessage } from "node:http";
 import { createRequestAuthorizer } from "@chronogram/auth";
 import { loadConfig } from "@chronogram/config";
 import { createMemoryOs, renderModuleMetricsPrometheus } from "@chronogram/core";
-import type {
-  CompactConversationRequest,
-  FeedbackMemoryRequest,
-  IngestMemoryRequest,
-  RecallMemoryRequest,
-  WorkerHeartbeat,
+import type { IngestMemoryRequest, WorkerHeartbeat } from "@chronogram/schemas";
+import {
+  ValidationError,
+  parseCompactConversationRequest,
+  parseFeedbackMemoryRequest,
+  parseIngestMemoryRequest,
+  parseRecallMemoryRequest,
+  isMemoryScope,
 } from "@chronogram/schemas";
 
 const config = loadConfig();
@@ -49,30 +51,37 @@ const server = createServer(async (req, res) => {
 
     if (method === "GET" && url.pathname === "/v1/memories") {
       const scope = url.searchParams.get("scope") ?? undefined;
+      if (scope && !isMemoryScope(scope)) {
+        return sendJson(res, 422, {
+          error: "validation_failed",
+          message:
+            "scope must be one of session, agent, user, user-profile, workspace, global, project:<id>, skill:<id>, or session:<id>.",
+        });
+      }
       const memories = await memoryOs.listMemories(scope as IngestMemoryRequest["scope"] | undefined);
       return sendJson(res, 200, { memories });
     }
 
     if (method === "POST" && url.pathname === "/v1/memories/ingest") {
-      const payload = (await readJson(req)) as IngestMemoryRequest;
+      const payload = parseIngestMemoryRequest(await readJson(req));
       const response = await memoryOs.ingest(payload);
       return sendJson(res, 202, response);
     }
 
     if (method === "POST" && url.pathname === "/v1/memories/recall") {
-      const payload = (await readJson(req)) as RecallMemoryRequest;
+      const payload = parseRecallMemoryRequest(await readJson(req));
       const response = await memoryOs.recall(payload);
       return sendJson(res, 200, response);
     }
 
     if (method === "POST" && url.pathname === "/v1/memories/feedback") {
-      const payload = (await readJson(req)) as FeedbackMemoryRequest;
+      const payload = parseFeedbackMemoryRequest(await readJson(req));
       const response = await memoryOs.feedback(payload);
       return sendJson(res, response.updated ? 200 : 404, response);
     }
 
     if (method === "POST" && url.pathname === "/v1/memories/compact") {
-      const payload = (await readJson(req)) as CompactConversationRequest;
+      const payload = parseCompactConversationRequest(await readJson(req));
       const response = await memoryOs.compactConversation(payload);
       return sendJson(res, response.triggered ? 202 : 200, response);
     }
@@ -102,8 +111,9 @@ const server = createServer(async (req, res) => {
     });
   } catch (error) {
     const candidate = error as Error;
-    return sendJson(res, 400, {
-      error: "request_failed",
+    const isValidation = error instanceof ValidationError;
+    return sendJson(res, isValidation ? error.statusCode : 400, {
+      error: isValidation ? "validation_failed" : "request_failed",
       message: candidate.message,
     });
   }

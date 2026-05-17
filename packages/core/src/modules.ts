@@ -135,9 +135,19 @@ const collectAugmentations = async ({
     vectorHits,
     graphHits,
     workingHits: new Set(workingIds),
-    storesQueried: ["working-memory", "semantic-store", "graph-store"],
+    storesQueried: [
+      "state-store",
+      "working-memory",
+      "semantic-store",
+      "graph-store",
+    ],
   };
 };
+
+const buildStoredIn = (statuses: Array<[string, boolean]>): string[] => [
+  "state-store",
+  ...statuses.filter(([, ok]) => ok).map(([store]) => store),
+];
 
 const createModule = ({
   id,
@@ -195,10 +205,10 @@ const createModule = ({
               accepted: true,
               deduplicated: true,
               artifactsCreated: 0,
-              chunksCreated: 0,
-              entitiesExtracted: 0,
-              storedIn: ["working-memory", "semantic-store", "graph-store"],
-            } satisfies IngestMemoryResponse,
+	            chunksCreated: 0,
+	            entitiesExtracted: 0,
+	            storedIn: ["state-store"],
+	          } satisfies IngestMemoryResponse,
             rootArtifact: existing,
             chunks: [] as StoredChunk[],
           };
@@ -244,28 +254,33 @@ const createModule = ({
             accepted: true,
             deduplicated: false,
             artifactsCreated: chunks.length + 1,
-            chunksCreated: chunks.length,
-            entitiesExtracted: rootEntities.length,
-            storedIn: ["working-memory", "semantic-store", "graph-store"],
-          } satisfies IngestMemoryResponse,
+	            chunksCreated: chunks.length,
+	            entitiesExtracted: rootEntities.length,
+	            storedIn: ["state-store"],
+	          } satisfies IngestMemoryResponse,
           rootArtifact,
           chunks,
         };
       });
 
-      await Promise.all([
-        redisAdapter.rememberRecent(
-          request.scope,
-          id,
+	      const [workingMemoryOk, semanticStoreOk, graphStoreOk] = await Promise.all([
+	        redisAdapter.rememberRecent(
+	          request.scope,
+	          id,
           result.rootArtifact.id,
           ...result.chunks.map((chunk) => chunk.artifact.id),
         ),
         weaviateAdapter.upsertChunks(result.chunks, id),
-        neo4jAdapter.upsertMemory(result.rootArtifact, result.chunks, id),
-        ...(afterIngest ? [afterIngest(result.rootArtifact, result.chunks)] : []),
-      ]);
+	        neo4jAdapter.upsertMemory(result.rootArtifact, result.chunks, id),
+	        ...(afterIngest ? [afterIngest(result.rootArtifact, result.chunks)] : []),
+	      ]);
+	      result.response.storedIn = buildStoredIn([
+	        ["working-memory", Boolean(workingMemoryOk)],
+	        ["semantic-store", Boolean(semanticStoreOk)],
+	        ["graph-store", Boolean(graphStoreOk)],
+	      ]);
 
-      return result.response;
+	      return result.response;
     },
     recall: async ({ request, state, limit }: RecallSelection): Promise<ModuleRecallResult> => {
       const queryTokens = tokenize(request.query);

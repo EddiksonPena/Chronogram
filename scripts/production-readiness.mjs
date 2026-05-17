@@ -207,12 +207,18 @@ const readResponseJson = async (response) => {
   }
 };
 
+const requestTimeoutMs = () => {
+  const parsed = Number(option("timeout-ms", process.env.CHRONOGRAM_SMOKE_TIMEOUT_MS ?? "120000"));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 120000;
+};
+
 const smoke = async () => {
   const baseUrl = option("base-url", process.env.CHRONOGRAM_BASE_URL ?? "http://127.0.0.1:4000");
   const workerUrl = option("worker-url", process.env.CHRONOGRAM_WORKER_URL ?? "http://127.0.0.1:4010");
   const apiKey = option("api-key", process.env.CHRONOGRAM_API_KEY ?? "");
   const bearerToken = option("bearer-token", process.env.CHRONOGRAM_BEARER_TOKEN ?? "");
-  const scope = option("scope", "production-readiness");
+  const scope = option("scope", "project:production-readiness");
+  const timeoutMs = requestTimeoutMs();
   const now = new Date().toISOString();
   const unique = `chronogram-production-smoke-${Date.now()}`;
   const checks = [];
@@ -240,7 +246,7 @@ const smoke = async () => {
       tags: ["smoke", "production"],
       content: `Production readiness smoke memory ${unique} at ${now}.`,
     }),
-    signal: AbortSignal.timeout(6000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   checks.push({
     id: "ingest-memory",
@@ -256,7 +262,7 @@ const smoke = async () => {
       query: unique,
       includeDiagnostics: true,
     }),
-    signal: AbortSignal.timeout(6000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const recallPayload = await readResponseJson(recallResponse);
   const recallMatches = JSON.stringify(recallPayload).includes(unique);
@@ -272,7 +278,7 @@ const smoke = async () => {
 
   const appMetricsResponse = await fetch(`${baseUrl}/v1/metrics/modules`, {
     headers: addHeaderAuth({}, apiKey, bearerToken),
-    signal: AbortSignal.timeout(6000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   checks.push({
     id: "app-module-metrics",
@@ -282,7 +288,7 @@ const smoke = async () => {
 
   const appPrometheusResponse = await fetch(`${baseUrl}/metrics`, {
     headers: addHeaderAuth({}, apiKey, bearerToken),
-    signal: AbortSignal.timeout(6000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   checks.push({
     id: "app-prometheus-metrics",
@@ -292,7 +298,7 @@ const smoke = async () => {
 
   const workflowDefinitionsResponse = await fetch(`${workerUrl}/workflows/definitions`, {
     headers: addHeaderAuth({}, apiKey, bearerToken),
-    signal: AbortSignal.timeout(6000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   checks.push({
     id: "worker-workflow-definitions",
@@ -302,7 +308,7 @@ const smoke = async () => {
 
   const workflowRunsResponse = await fetch(`${workerUrl}/workflows/runs`, {
     headers: addHeaderAuth({}, apiKey, bearerToken),
-    signal: AbortSignal.timeout(6000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   checks.push({
     id: "worker-workflow-runs",
@@ -312,7 +318,7 @@ const smoke = async () => {
 
   const workerPrometheusResponse = await fetch(`${workerUrl}/metrics`, {
     headers: addHeaderAuth({}, apiKey, bearerToken),
-    signal: AbortSignal.timeout(6000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   checks.push({
     id: "worker-prometheus-metrics",
