@@ -66,6 +66,9 @@ export interface RecallMemoryRequest {
   limit?: number;
   includeDiagnostics?: boolean;
   sessionId?: string;
+  filter?: {
+    tags?: string[];
+  };
 }
 
 export interface RecallCandidate {
