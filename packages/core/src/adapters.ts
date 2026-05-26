@@ -157,15 +157,28 @@ export class WeaviateSemanticAdapter {
     limit: number,
     scope: MemoryScope | undefined,
     moduleId: MemoryModuleId,
+    filterTags?: string[],
   ): Promise<Map<string, number>> {
     const className = WEAVIATE_CLASSES[moduleId];
 
     try {
       await this.ensureSchema(className);
       const vector = await this.embeddings.embed(query, "query");
-      const whereClause = scope
-        ? `where:{path:[\"scope\"],operator:Equal,valueText:\"${escapeGraphQl(scope)}\"},`
-        : "";
+      const conditions: string[] = [];
+      if (scope) {
+        conditions.push(`{path:[\"scope\"],operator:Equal,valueText:\"${escapeGraphQl(scope)}\"}`);
+      }
+      if (filterTags && filterTags.length > 0) {
+        for (const tag of filterTags) {
+          conditions.push(`{path:[\"tags\"],operator:ContainsAny,valueText:\"${escapeGraphQl(tag)}\"}`);
+        }
+      }
+      const whereClause =
+        conditions.length === 0
+          ? ""
+          : conditions.length === 1
+          ? `where:${conditions[0]},`
+          : `where:{operator:And,operands:[${conditions.join(",")}]},`;
       const graphQl = {
         query: `{
           Get {

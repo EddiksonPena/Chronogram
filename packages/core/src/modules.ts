@@ -116,7 +116,7 @@ const collectAugmentations = async ({
 }): Promise<RetrievalAugmentations> => {
   const [workingIds, vectorHits, graphEntities] = await Promise.all([
     redisAdapter.getRecent(request.scope, moduleId),
-    weaviateAdapter.search(request.query, (request.limit ?? 5) * 4, request.scope, moduleId),
+    weaviateAdapter.search(request.query, (request.limit ?? 5) * 4, request.scope, moduleId, request.filter?.tags),
     neo4jAdapter.searchRelatedEntities(queryEntities, moduleId),
   ]);
 
@@ -295,7 +295,11 @@ const createModule = ({
           !request.memoryTypes || request.memoryTypes.length === 0
             ? true
             : request.memoryTypes.includes(chunk.artifact.type);
-        return moduleOk && scopeOk && typeOk;
+        const tagsOk =
+          !request.filter?.tags?.length
+            ? true
+            : request.filter.tags.every((tag) => chunk.artifact.tags.includes(tag));
+        return moduleOk && scopeOk && typeOk && tagsOk;
       });
 
       const ranked = filteredChunks
